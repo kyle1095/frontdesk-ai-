@@ -109,6 +109,11 @@ export const operatorData = createServerFn({ method: "POST" })
     }
   });
 
+/** The install snippet always targets the published widget host, not a preview proxy host. */
+export const siteOrigin = createServerFn({ method: "GET" }).handler(
+  async () => "https://f84c49587847aae2d38ee792763f89f2.ctonew.app",
+);
+
 /** Small public health check, used by the demo page footer. */
 export const storageHealth = createServerFn({ method: "GET" }).handler(async () => {
   const status = await store.storageStatus();

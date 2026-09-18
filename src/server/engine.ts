@@ -128,6 +128,13 @@ export function initialState(): ConversationState {
 const FLOWS: FlowKind[] = ["idle", "lead", "ticket", "troubleshooting", "handoff"];
 
 function normaliseState(raw: unknown): ConversationState {
+  if (typeof raw === "string") {
+    try {
+      return normaliseState(JSON.parse(raw));
+    } catch {
+      return initialState();
+    }
+  }
   if (!raw || typeof raw !== "object") return initialState();
   const obj = raw as Partial<ConversationState>;
   const flow = FLOWS.includes(obj.flow as FlowKind) ? (obj.flow as FlowKind) : "idle";

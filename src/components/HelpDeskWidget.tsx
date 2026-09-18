@@ -41,6 +41,8 @@ export interface HelpDeskWidgetConfig {
   /** Optional browser-only KB for the self-serve preview. When absent, the server engine is used. */
   knowledgeBase?: KbEntry[];
   localPreview?: boolean;
+  /** Optional public API endpoint used by cross-origin iframe installs. */
+  apiUrl?: string;
   /** Where the launcher sits. Defaults to the bottom-right. */
   position?: "right" | "left";
 }
@@ -152,15 +154,27 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
           setStorage({ configured: false, ok: true });
           await pushAgent(reply);
         } else {
-          const res = await chatTurn({
-            data: {
-              businessId: config.businessId,
-              conversationId: conversationRef.current,
-              message: trimmed,
-              action,
-              state: stateRef.current,
-            },
-          });
+          const payload = {
+            businessId: config.businessId,
+            conversationId: conversationRef.current,
+            message: trimmed,
+            action,
+            state: stateRef.current,
+          };
+          const res = config.apiUrl
+            ? await fetch(config.apiUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              }).then(async (response) => {
+                if (!response.ok) {
+                  throw new Error(`Chat request failed (${response.status}).`);
+                }
+                return (await response.json()) as Awaited<
+                  ReturnType<typeof chatTurn>
+                >;
+              })
+            : await chatTurn({ data: payload });
           stateRef.current = res.state;
           conversationRef.current = res.conversationId;
           setStorage(res.storage);
