@@ -864,7 +864,7 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   if (message) {
     try {
       await store.appendMessage(conversationId, "user", message, { action });
-      storageOk = true;
+      if (conversationId) storageOk = true;
     } catch (err) {
       storageError = errText(err);
       storageOk = false;
