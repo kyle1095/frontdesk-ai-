@@ -157,6 +157,33 @@ export async function query(
 }
 
 const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS businesses (
+     id text PRIMARY KEY,
+     name text NOT NULL,
+     slug text UNIQUE NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE TABLE IF NOT EXISTS accounts (
+     id text PRIMARY KEY,
+     email text UNIQUE NOT NULL,
+     password_hash text NOT NULL,
+     business_id text NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+     created_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE TABLE IF NOT EXISTS sessions (
+     token text PRIMARY KEY,
+     account_id text NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+     expires_at timestamptz NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `INSERT INTO businesses (id, name, slug)
+   VALUES ('cadence', 'Cadence', 'cadence')
+   ON CONFLICT (slug) DO NOTHING`,
+  `INSERT INTO accounts (id, email, password_hash, business_id)
+   VALUES ('cadence-demo-account', 'demo@cadence.example', 'scrypt:frontdesk-demo-salt-2026:6719ba12d9992eb3789f7bbec4d4ba98e30527f089ac2df59be3bd6eaa681dab22c19ca9f10be28093d6679e552795f87ff9c7c9f390fda9b6083ccc9d401afb', 'cadence')
+   ON CONFLICT (email) DO NOTHING`,
+  `CREATE INDEX IF NOT EXISTS sessions_account_idx ON sessions (account_id)`,
+  `CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions (expires_at)`,
   `CREATE TABLE IF NOT EXISTS conversations (
      id text PRIMARY KEY,
      business_id text NOT NULL,
