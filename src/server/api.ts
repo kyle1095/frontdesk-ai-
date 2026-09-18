@@ -14,8 +14,50 @@ import {
   type TurnResult,
 } from "./engine";
 import * as store from "./store";
+import * as auth from "./auth";
 
 export type { TurnResult } from "./engine";
+
+export type AuthResponse = {
+  ok: boolean;
+  error?: string;
+  account?: auth.Account;
+};
+
+export const authSignup = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const obj = (data ?? {}) as Record<string, unknown>;
+    return {
+      email: typeof obj.email === "string" ? obj.email : "",
+      password: typeof obj.password === "string" ? obj.password : "",
+      businessName:
+        typeof obj.businessName === "string" ? obj.businessName : "",
+    };
+  })
+  .handler(async ({ data }): Promise<AuthResponse> =>
+    auth.signup(data.email, data.password, data.businessName),
+  );
+
+export const authLogin = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const obj = (data ?? {}) as Record<string, unknown>;
+    return {
+      email: typeof obj.email === "string" ? obj.email : "",
+      password: typeof obj.password === "string" ? obj.password : "",
+    };
+  })
+  .handler(async ({ data }): Promise<AuthResponse> =>
+    auth.login(data.email, data.password),
+  );
+
+export const authLogout = createServerFn({ method: "POST" }).handler(async () => {
+  await auth.destroySession();
+  return { ok: true };
+});
+
+export const authMe = createServerFn({ method: "GET" }).handler(async () =>
+  auth.currentAccount(),
+);
 
 /* ------------------------------------------------------------------ */
 /* Chat                                                                */
