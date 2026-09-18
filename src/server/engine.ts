@@ -97,6 +97,10 @@ export interface TurnResult {
   state: ConversationState;
   replies: AgentReply[];
   storage: StorageInfo;
+  plan: string;
+  usage: number;
+  conversationLimit: number;
+  brandingRequired: boolean;
 }
 
 export interface TurnInput {
@@ -784,6 +788,30 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   let state = normaliseState(input.state);
   let storageError: string | undefined;
   let storageOk = false;
+  let planUsage: store.BusinessPlanUsage = {
+    plan: {
+      id: "free",
+      name: "Free",
+      monthlyPrice: 0,
+      conversationLimit: 50,
+      seats: 1,
+      branding: true,
+      whiteLabel: false,
+      paymentLinkUrl: null,
+      description: "",
+      highlights: [],
+    },
+    used: 0,
+    limit: 50,
+    brandingRequired: true,
+  };
+
+  try {
+    planUsage = await store.getBusinessPlanUsage(businessId);
+    storageOk = true;
+  } catch (err) {
+    storageError = errText(err);
+  }
 
   /* Load authoritative state from the database when we can. */
   if (conversationId) {
@@ -800,9 +828,32 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
       storageError = errText(err);
     }
   }
+  if (!conversationId && planUsage.used >= planUsage.limit) {
+    return {
+      conversationId: null,
+      state,
+      replies: [
+        {
+          text: `You've reached the ${planUsage.plan.name} plan's ${planUsage.limit.toLocaleString()} conversation limit for this month. Please upgrade your plan to keep chatting — you can review available plans at /pricing.`,
+          variant: "warning",
+        },
+      ],
+      storage: {
+        configured: store.databaseConfigured(),
+        ok: storageOk,
+        error: storageError,
+      },
+      plan: planUsage.plan.id,
+      usage: planUsage.used,
+      conversationLimit: planUsage.limit,
+      brandingRequired: planUsage.brandingRequired,
+    };
+  }
+
   if (!conversationId) {
     try {
       conversationId = await store.createConversation(businessId, state);
+      planUsage = { ...planUsage, used: planUsage.used + 1 };
       storageOk = true;
     } catch (err) {
       storageError = errText(err);
@@ -963,6 +1014,10 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
       ok: storageOk,
       error: storageOk ? undefined : storageError ?? "not stored",
     },
+    plan: planUsage.plan.id,
+    usage: planUsage.used,
+    conversationLimit: planUsage.limit,
+    brandingRequired: planUsage.brandingRequired,
   };
 }
 
