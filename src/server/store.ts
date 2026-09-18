@@ -234,7 +234,7 @@ export async function createConversation(businessId: string, initialState: unkno
   const id = crypto.randomUUID();
   await query(
     `INSERT INTO conversations (id, business_id, state) VALUES ($1, $2, $3::jsonb)`,
-    [id, businessId, JSON.stringify(initialState ?? {})],
+    [id, businessId, initialState ?? {}],
   );
   return id;
 }
@@ -243,7 +243,7 @@ export async function saveConversationState(id: string, state: unknown): Promise
   await ensureSchema();
   await query(`UPDATE conversations SET state = $2::jsonb, updated_at = now() WHERE id = $1`, [
     id,
-    JSON.stringify(state ?? {}),
+    state ?? {},
   ]);
 }
 
@@ -269,7 +269,7 @@ export async function appendMessage(
     conversationId,
     role,
     body,
-    meta ? JSON.stringify(meta) : null,
+    meta ?? null,
   ]);
   await query(`UPDATE conversations SET updated_at = now() WHERE id = $1`, [conversationId]);
 }

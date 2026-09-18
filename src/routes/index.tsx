@@ -69,6 +69,13 @@ function Home() {
         >
           Operator view
         </a>
+        {" · "}
+        <a
+          className="underline decoration-dotted hover:text-white"
+          href="/install"
+        >
+          Install widget
+        </a>
       </div>
 
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">

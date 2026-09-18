@@ -5,4 +5,9 @@
   body {
     @apply bg-white text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100;
   }
+
+  html:has(.widget-frame-root),
+  html:has(.widget-frame-root) body {
+    background: transparent;
+  }
 }
