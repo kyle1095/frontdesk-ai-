@@ -772,7 +772,11 @@ function errText(err: unknown): string {
 }
 
 export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Promise<TurnResult> {
-  const businessId = input.businessId || business.id;
+  const requestedBusinessId = input.businessId || business.id;
+  const resolvedBusinessId = await store
+    .resolveBusinessId(requestedBusinessId)
+    .catch(() => null);
+  const businessId = resolvedBusinessId ?? business.id;
   const message = (input.message ?? "").trim();
   const action = input.action ?? "send";
 
@@ -785,10 +789,11 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   if (conversationId) {
     try {
       const loaded = await store.loadConversationState(conversationId);
-      if (loaded) {
+      if (loaded && loaded.businessId === businessId) {
         state = normaliseState(loaded.state);
         storageOk = true;
       } else {
+        // Never allow a conversation token from one tenant to be reused by another.
         conversationId = null;
       }
     } catch (err) {

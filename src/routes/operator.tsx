@@ -3,9 +3,8 @@
  *
  * Lists captured leads (with the demo slot they chose), filed tickets (with
  * reference number, triage answers and status) and every conversation, with a
- * transcript viewer. Gated by OPERATOR_PASSWORD; when that variable is unset the
- * page shows a loud warning and stays open, so a missing secret can never lock
- * the owner out of their own data.
+ * transcript viewer. Access is granted only through the signed-in account
+ * session, and every query is scoped to that account's business.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -13,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   operatorData,
   operatorUpdateTicketStatus,
+  authLogout,
   type OperatorPayload,
 } from "~/server/api";
 import type { TicketStatus } from "~/server/store";
@@ -21,8 +21,7 @@ export const Route = createFileRoute("/operator")({
   component: OperatorPage,
 });
 
-const STORAGE_KEY = "frontdesk.operator.password";
-
+// Operator access is provided by the HttpOnly account session.
 function fmt(value: string): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -30,7 +29,6 @@ function fmt(value: string): string {
 }
 
 function OperatorPage() {
-  const [password, setPassword] = useState("");
   const [data, setData] = useState<OperatorPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [transcriptId, setTranscriptId] = useState<string | null>(null);
@@ -43,21 +41,19 @@ function OperatorPage() {
   const [updatingTicketId, setUpdatingTicketId] = useState<number | null>(null);
 
   const load = useCallback(
-    async (pw: string, conversationId?: string, searchOverride?: string) => {
+    async (conversationId?: string, searchOverride?: string) => {
       setLoading(true);
       try {
         const res = await operatorData({
-          data: {
-            password: pw,
-            conversationId,
-            search: searchOverride ?? searchQuery,
-          },
+          data: { conversationId, search: searchOverride ?? searchQuery },
         });
         setData(res);
+        if (!res.ok && res.error === "Sign-in required.") {
+          window.location.replace("/login");
+        }
       } catch (err) {
         setData({
           ok: false,
-          passwordConfigured: true,
           error:
             err instanceof Error
               ? err.message
@@ -76,21 +72,17 @@ function OperatorPage() {
   );
 
   useEffect(() => {
-    const saved = window.sessionStorage.getItem(STORAGE_KEY) ?? "";
-    setPassword(saved);
-    void load(saved);
+    void load();
   }, [load]);
 
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault();
-    window.sessionStorage.setItem(STORAGE_KEY, password);
-    setTranscriptId(null);
-    void load(password, undefined, searchInput.trim());
+  const signOut = async () => {
+    await authLogout();
+    window.location.replace("/login");
   };
 
   const openTranscript = (id: string) => {
     setTranscriptId(id);
-    void load(password, id, searchQuery);
+    void load(id, searchQuery);
   };
 
   const visibleTickets = useMemo(() => {
@@ -115,24 +107,23 @@ function OperatorPage() {
     const nextSearch = searchInput.trim();
     setSearchQuery(nextSearch);
     setTranscriptId(null);
-    void load(password, undefined, nextSearch);
+    void load(undefined, nextSearch);
   };
 
   const changeTicketStatus = async (ticketId: number, status: TicketStatus) => {
     setUpdatingTicketId(ticketId);
     const result = await operatorUpdateTicketStatus({
-      data: { password, ticketId, status },
+      data: { ticketId, status },
     });
     if (!result.ok) {
       window.alert(result.error ?? "Could not update ticket status.");
     } else {
-      await load(password, transcriptId ?? undefined, searchQuery);
+      await load(transcriptId ?? undefined, searchQuery);
     }
     setUpdatingTicketId(null);
   };
 
-  const wrongPassword =
-    data && !data.ok && data.error === "Incorrect password.";
+  const account = data?.account;
 
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-900">
@@ -151,52 +142,16 @@ function OperatorPage() {
             >
               ← Back to demo site
             </a>
-            <form onSubmit={submit} className="flex items-center gap-2">
-              <label className="sr-only" htmlFor="operator-password">
-                Operator password
-              </label>
-              <input
-                id="operator-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Operator password"
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-              />
-              <button
-                type="submit"
-                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                Load
-              </button>
-            </form>
+            <div className="flex items-center gap-3 text-sm">
+              <span className="text-slate-600">{account?.businessName ?? "Signed in"}</span>
+              <button type="button" onClick={() => void signOut()} className="rounded-lg bg-slate-900 px-3 py-2 font-semibold text-white hover:bg-slate-800">Sign out</button>
+            </div>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-        {data && !data.passwordConfigured && (
-          <p
-            role="alert"
-            className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-          >
-            <strong>OPERATOR_PASSWORD is not set.</strong> This page is unlocked
-            — anyone with the link can read every lead, ticket and transcript.
-            Set <code className="font-mono">OPERATOR_PASSWORD</code> in the
-            environment to gate it.
-          </p>
-        )}
-
-        {wrongPassword && (
-          <p
-            role="alert"
-            className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
-          >
-            Wrong password. Try again, or clear the field and press Load if the
-            operator password was only just removed.
-          </p>
-        )}
-
+        {/* Authentication failures redirect to /login before tenant data renders. */}
         {data && (
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <span
@@ -222,7 +177,7 @@ function OperatorPage() {
             <button
               type="button"
               onClick={() =>
-                void load(password, transcriptId ?? undefined, searchQuery)
+                void load(transcriptId ?? undefined, searchQuery)
               }
               className="rounded-lg border border-slate-300 px-3 py-1 font-medium text-slate-700 hover:bg-white"
             >
