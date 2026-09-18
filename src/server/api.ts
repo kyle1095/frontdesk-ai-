@@ -5,7 +5,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { createHash, timingSafeEqual } from "node:crypto";
+// Authentication uses the table-backed session helpers below.
 import { business } from "~/content/business";
 import {
   handleTurn,
@@ -93,17 +93,10 @@ export const chatTurn = createServerFn({ method: "POST" })
 /* Operator view                                                       */
 /* ------------------------------------------------------------------ */
 
-function passwordMatches(supplied: string, expected: string): boolean {
-  const a = createHash("sha256").update(supplied).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
 export interface OperatorPayload {
   ok: boolean;
   error?: string;
-  /** true when OPERATOR_PASSWORD is unset — the page shows a warning banner. */
-  passwordConfigured: boolean;
+  account?: auth.Account;
   storage: store.StorageStatus;
   leads: store.LeadRecord[];
   tickets: store.TicketRecord[];
@@ -115,23 +108,19 @@ export interface OperatorPayload {
 export const operatorData = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const obj = (data ?? {}) as {
-      password?: string;
       conversationId?: string;
       search?: string;
     };
     return {
-      password: typeof obj.password === "string" ? obj.password : "",
       conversationId:
         typeof obj.conversationId === "string" ? obj.conversationId : undefined,
       search: typeof obj.search === "string" ? obj.search.slice(0, 200) : "",
     };
   })
   .handler(async ({ data }): Promise<OperatorPayload> => {
-    const expected = process.env.OPERATOR_PASSWORD;
-    const passwordConfigured = Boolean(expected);
+    const account = await auth.currentAccount();
     const blank: OperatorPayload = {
       ok: false,
-      passwordConfigured,
       storage: {
         configured: store.databaseConfigured(),
         reachable: false,
@@ -142,16 +131,14 @@ export const operatorData = createServerFn({ method: "POST" })
       conversations: [],
       searchResults: [],
     };
-
-    if (expected && !passwordMatches(data.password, expected)) {
-      return { ...blank, error: "Incorrect password." };
-    }
+    if (!account) return { ...blank, error: "Sign-in required." };
 
     const storage = await store.storageStatus();
     if (!storage.reachable) {
       return {
         ...blank,
         ok: true,
+        account,
         storage,
         error: storage.error ?? "Database not reachable.",
       };
@@ -159,17 +146,17 @@ export const operatorData = createServerFn({ method: "POST" })
 
     try {
       const [leads, tickets, conversations, searchResults] = await Promise.all([
-        store.listLeads(50),
-        store.listTickets(50),
-        store.listConversations(30),
-        store.searchConversations(data.search, 30),
+        store.listLeads(account.businessId, 50),
+        store.listTickets(account.businessId, 50),
+        store.listConversations(account.businessId, 30),
+        store.searchConversations(account.businessId, data.search, 30),
       ]);
       const transcript = data.conversationId
-        ? await store.getTranscript(data.conversationId)
+        ? await store.getTranscript(data.conversationId, account.businessId)
         : undefined;
       return {
         ok: true,
-        passwordConfigured,
+        account,
         storage,
         leads,
         tickets,
@@ -180,8 +167,8 @@ export const operatorData = createServerFn({ method: "POST" })
     } catch (err) {
       return {
         ...blank,
+        account,
         ok: false,
-        passwordConfigured,
         storage,
         error: err instanceof Error ? err.message : String(err),
       };
@@ -196,21 +183,18 @@ export interface OperatorMutationResponse {
 export const operatorUpdateTicketStatus = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const obj = (data ?? {}) as {
-      password?: string;
       ticketId?: number;
       status?: string;
     };
     return {
-      password: typeof obj.password === "string" ? obj.password : "",
       ticketId:
         typeof obj.ticketId === "number" ? obj.ticketId : Number(obj.ticketId),
       status: typeof obj.status === "string" ? obj.status : "",
     };
   })
   .handler(async ({ data }): Promise<OperatorMutationResponse> => {
-    const expected = process.env.OPERATOR_PASSWORD;
-    if (expected && !passwordMatches(data.password, expected))
-      return { ok: false, error: "Incorrect password." };
+    const account = await auth.currentAccount();
+    if (!account) return { ok: false, error: "Sign-in required." };
     if (
       !Number.isInteger(data.ticketId) ||
       data.ticketId < 1 ||
@@ -218,7 +202,7 @@ export const operatorUpdateTicketStatus = createServerFn({ method: "POST" })
     ) {
       return { ok: false, error: "Invalid ticket update." };
     }
-    return store.updateTicketStatus(data.ticketId, data.status);
+    return store.updateTicketStatus(data.ticketId, data.status, account.businessId);
   });
 
 /** The install snippet always targets the published widget host, not a preview proxy host. */
@@ -235,7 +219,7 @@ export const storageHealth = createServerFn({ method: "GET" }).handler(
       reachable: status.reachable,
       driver: status.driver,
       error: status.error ? status.error.slice(0, 300) : undefined,
-      leads: status.reachable ? (await store.listLeads(1)).length : 0,
+      leads: status.reachable ? (await store.listLeads("cadence", 1)).length : 0,
     };
   },
 );

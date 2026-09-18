@@ -281,6 +281,17 @@ function toText(value: unknown): string {
   return value == null ? "" : String(value);
 }
 
+export async function resolveBusinessId(value: string): Promise<string | null> {
+  await ensureSchema();
+  const key = value.trim().toLowerCase();
+  if (!key) return null;
+  const rows = await query(
+    `SELECT id FROM businesses WHERE id = $1 OR slug = $1 LIMIT 1`,
+    [key],
+  );
+  return rows[0]?.id == null ? null : toText(rows[0].id);
+}
+
 export async function createConversation(
   businessId: string,
   initialState: unknown,
@@ -394,12 +405,15 @@ export async function createTicket(
   }
 }
 
-export async function listLeads(limit = 50): Promise<LeadRecord[]> {
+export async function listLeads(
+  businessId: string,
+  limit = 50,
+): Promise<LeadRecord[]> {
   await ensureSchema();
   const rows = await query(
     `SELECT id, business_id, conversation_id, name, email, company, need, slot_label, slot_starts_at, status, created_at
-     FROM leads ORDER BY id DESC LIMIT $1`,
-    [limit],
+     FROM leads WHERE business_id = $1 ORDER BY id DESC LIMIT $2`,
+    [businessId, limit],
   );
   return rows.map((r) => ({
     id: Number(r.id),
@@ -416,12 +430,15 @@ export async function listLeads(limit = 50): Promise<LeadRecord[]> {
   }));
 }
 
-export async function listTickets(limit = 50): Promise<TicketRecord[]> {
+export async function listTickets(
+  businessId: string,
+  limit = 50,
+): Promise<TicketRecord[]> {
   await ensureSchema();
   const rows = await query(
     `SELECT id, reference, business_id, conversation_id, subject, what_doing, what_happened, urgency, status, created_at
-     FROM tickets ORDER BY id DESC LIMIT $1`,
-    [limit],
+     FROM tickets WHERE business_id = $1 ORDER BY id DESC LIMIT $2`,
+    [businessId, limit],
   );
   return rows.map((r) => ({
     id: Number(r.id),
@@ -446,14 +463,15 @@ export function isTicketStatus(value: string): value is TicketStatus {
 export async function updateTicketStatus(
   id: number,
   status: TicketStatus,
+  businessId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isTicketStatus(status))
     return { ok: false, error: "Invalid ticket status." };
   try {
     await ensureSchema();
     const rows = await query(
-      `UPDATE tickets SET status = $2 WHERE id = $1 RETURNING id`,
-      [id, status],
+      `UPDATE tickets SET status = $2 WHERE id = $1 AND business_id = $3 RETURNING id`,
+      [id, status, businessId],
     );
     return rows.length
       ? { ok: true }
@@ -467,6 +485,7 @@ export async function updateTicketStatus(
 }
 
 export async function searchConversations(
+  businessId: string,
   queryText: string,
   limit = 30,
 ): Promise<ConversationSearchResult[]> {
@@ -477,14 +496,14 @@ export async function searchConversations(
     `SELECT c.id, c.business_id, c.created_at, c.updated_at,
             (SELECT count(*) FROM messages all_messages WHERE all_messages.conversation_id = c.id) AS message_count,
             (SELECT matched.body FROM messages matched
-             WHERE matched.conversation_id = c.id AND matched.body ILIKE '%' || $1 || '%'
+             WHERE matched.conversation_id = c.id AND matched.body ILIKE '%' || $2 || '%'
              ORDER BY matched.id ASC LIMIT 1) AS matched_body
      FROM conversations c
-     WHERE EXISTS (
-       SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.body ILIKE '%' || $1 || '%'
+     WHERE c.business_id = $1 AND EXISTS (
+     SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.body ILIKE '%' || $2 || '%'
      )
-     ORDER BY c.updated_at DESC LIMIT $2`,
-    [term, limit],
+     ORDER BY c.updated_at DESC LIMIT $3`,
+     [businessId, term, limit],
   );
   return rows.map((r) => ({
     id: toText(r.id),
@@ -497,14 +516,15 @@ export async function searchConversations(
 }
 
 export async function listConversations(
+  businessId: string,
   limit = 30,
 ): Promise<ConversationSummary[]> {
   await ensureSchema();
   const rows = await query(
     `SELECT c.id, c.business_id, c.created_at, c.updated_at,
             (SELECT count(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count
-     FROM conversations c ORDER BY c.updated_at DESC LIMIT $1`,
-    [limit],
+     FROM conversations c WHERE c.business_id = $1 ORDER BY c.updated_at DESC LIMIT $2`,
+    [businessId, limit],
   );
   return rows.map((r) => ({
     id: toText(r.id),
@@ -517,11 +537,12 @@ export async function listConversations(
 
 export async function getTranscript(
   id: string,
+  businessId: string,
 ): Promise<ConversationTranscript | null> {
   await ensureSchema();
   const rows = await query(
-    `SELECT id, business_id, created_at, updated_at FROM conversations WHERE id = $1`,
-    [id],
+    `SELECT id, business_id, created_at, updated_at FROM conversations WHERE id = $1 AND business_id = $2`,
+    [id, businessId],
   );
   const row = rows[0];
   if (!row) return null;
