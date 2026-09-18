@@ -11,15 +11,18 @@ function WidgetPage() {
   const [options, setOptions] = useState({
     accent: "#0f766e",
     position: "right" as const,
+    businessSlug: "cadence",
   });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const accent = params.get("accent");
     const position = params.get("position") === "left" ? "left" : "right";
+    const businessSlug = params.get("business") || "cadence";
     setOptions({
       accent: accent && /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : "#0f766e",
       position,
+      businessSlug,
     });
     document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";
@@ -28,7 +31,7 @@ function WidgetPage() {
 
   const config = useMemo(
     () => ({
-      businessId: business.id,
+      businessId: options.businessSlug,
       businessName: business.name,
       title: `${business.name} support`,
       subtitle: "Answers, fixes, tickets and demos",

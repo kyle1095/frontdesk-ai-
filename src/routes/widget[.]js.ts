@@ -10,8 +10,10 @@ const LOADER = String.raw`/* Frontdesk AI widget loader — paste this script be
   var params = new URLSearchParams();
   var accent = script.getAttribute("data-accent-color");
   var position = script.getAttribute("data-position");
+  var business = script.getAttribute("data-business") || "cadence";
   if (accent) params.set("accent", accent);
   if (position === "left") params.set("position", "left");
+  if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(business)) params.set("business", business);
 
   var frame = document.createElement("iframe");
   frame.title = "Frontdesk AI chat widget";

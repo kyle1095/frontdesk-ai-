@@ -10,7 +10,7 @@ export const Route = createFileRoute("/install")({
 function InstallPage() {
   const { origin } = Route.useLoaderData();
   const [copied, setCopied] = useState(false);
-  const snippet = `<script src="${origin}/widget.js" data-accent-color="#0f766e"></script>`;
+  const snippet = `<script src="${origin}/widget.js" data-business="cadence" data-accent-color="#0f766e"></script>`;
 
   const copySnippet = async () => {
     try {
@@ -70,8 +70,9 @@ function InstallPage() {
             </button>
           </div>
           <p className="mt-3 text-xs text-teal-900">
-            Optional: change <code>data-accent-color</code> to a hex color. The
-            iframe keeps the widget styles isolated from the host page.
+            Set <code>data-business</code> to your business slug (it defaults to
+            <code>cadence</code>), and optionally change <code>data-accent-color</code> to
+            a hex color. The iframe keeps widget styles isolated from the host page.
           </p>
         </section>
 
