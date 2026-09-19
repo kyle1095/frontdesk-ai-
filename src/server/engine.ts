@@ -336,7 +336,7 @@ function startTroubleshooting(state: ConversationState, entry: KbEntry, startedW
   };
 }
 
-function unknownHandoff(state: ConversationState, question: string): FlowResult {
+function unknownHandoff(state: ConversationState, question: string, businessName = business.name): FlowResult {
   state.flow = "handoff";
   state.handoff = { question };
   return {
@@ -355,13 +355,13 @@ function unknownHandoff(state: ConversationState, question: string): FlowResult 
   };
 }
 
-function capabilityReply(state: ConversationState): FlowResult {
+function capabilityReply(state: ConversationState, businessName = business.name): FlowResult {
   state.flow = "idle";
   return {
     state,
     replies: [
       {
-        text: `I'm the ${business.name} assistant, running on Frontdesk AI. I can:\n• answer questions about ${business.name} — what it does, plans, the free trial, integrations, setup, security;\n• walk you through fixes for common problems;\n• book you a 30 minute demo with a specialist;\n• file a ticket with a reference number if you need a human.\n\nI only answer from ${business.name}'s own help content, so if something isn't in there I'll say so rather than guess.`,
+        text: `I'm the ${businessName} assistant, running on Frontdesk AI. I can:\n• answer questions about ${business.name} — what it does, plans, the free trial, integrations, setup, security;\n• walk you through fixes for common problems;\n• book you a 30 minute demo with a specialist;\n• file a ticket with a reference number if you need a human.\n\nI only answer from ${business.name}'s own help content, so if something isn't in there I'll say so rather than guess.`,
         chips: QUICK_CHIPS,
       },
     ],
@@ -626,7 +626,7 @@ function continueTroubleshooting(state: ConversationState, text: string, action:
 /* Flow: handoff (we could not answer, ticket offered)                 */
 /* ------------------------------------------------------------------ */
 
-function continueHandoff(state: ConversationState, text: string, entries: KbEntry[]): FlowResult {
+function continueHandoff(state: ConversationState, text: string, entries: KbEntry[], businessName = business.name): FlowResult {
   const question = state.handoff?.question ?? text;
   const replies: AgentReply[] = [];
 
@@ -658,7 +658,7 @@ function continueHandoff(state: ConversationState, text: string, entries: KbEntr
   }
 
   replies.push({
-    text: "I'm still not able to answer that from Cadence's help content. Shall I file it as a ticket so a human picks it up?",
+    text: `I'm still not able to answer that from ${businessName}'s help content. Shall I file it as a ticket so a human picks it up?`,
     chips: [
       { label: "Yes, file a ticket", action: "start_ticket" },
       { label: "No thanks", action: "restart" },
@@ -671,7 +671,7 @@ function continueHandoff(state: ConversationState, text: string, entries: KbEntr
 /* runFlow — synchronous conversation logic                            */
 /* ------------------------------------------------------------------ */
 
-export function runFlow(input: { state: ConversationState; message: string; action?: WidgetAction }, entries: KbEntry[] = knowledgeBase): FlowResult {
+export function runFlow(input: { state: ConversationState; message: string; action?: WidgetAction }, entries: KbEntry[] = knowledgeBase, businessName = business.name): FlowResult {
   const state = normaliseState(input.state);
   const action = input.action ?? "send";
   const text = (input.message ?? "").trim();
@@ -731,7 +731,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
   if (state.flow === "lead") return continueLead(state, text, entries);
   if (state.flow === "ticket") return continueTicket(state, text, entries);
   if (state.flow === "troubleshooting") return continueTroubleshooting(state, text, action, entries);
-  if (state.flow === "handoff") return continueHandoff(state, text, entries);
+  if (state.flow === "handoff") return continueHandoff(state, text, entries, businessName);
 
   /* --- idle: classify --- */
   if (RE_LEAD.test(text)) {
@@ -748,7 +748,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
     return answerFaq(state, best.entry);
   }
 
-  if (RE_CAPABILITY.test(text)) return capabilityReply(state);
+  if (RE_CAPABILITY.test(text)) return capabilityReply(state, businessName);
   if (RE_GREETING.test(text)) {
     state.flow = "idle";
     return {
@@ -771,7 +771,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
     };
   }
 
-  return unknownHandoff(state, text);
+  return unknownHandoff(state, text, businessName);
 }
 
 /* ------------------------------------------------------------------ */
@@ -796,6 +796,7 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   let storageError: string | undefined;
   let storageOk = false;
   let knowledgeEntries: KbEntry[] = [];
+  let businessName = business.name;
 
   let planUsage: store.BusinessPlanUsage = {
     plan: {
@@ -823,6 +824,8 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   }
 
   try {
+    const profile = await store.getBusinessProfile(businessId);
+    if (profile) businessName = profile.name;
     knowledgeEntries = await store.listKnowledgeBase(businessId);
   } catch (err) {
     storageError = storageError ?? errText(err);
@@ -887,7 +890,7 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   }
 
   /* --- conversation logic --- */
-  let result = runFlow({ state, message, action }, knowledgeEntries);
+  let result = runFlow({ state, message, action }, knowledgeEntries, businessName);
 
   /* Optional LLM assist: only when retrieval was NOT confident, let the model
      pick among the top candidates. Guarded — it can only return a KB entry. */
