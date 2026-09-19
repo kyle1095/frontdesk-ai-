@@ -265,6 +265,11 @@ export const operatorDeleteKnowledgeBase = createServerFn({ method: "POST" })
     return store.deleteKnowledgeBaseEntry(account.businessId, data.id);
   });
 
+export const installData = createServerFn({ method: "GET" }).handler(async () => ({
+  origin: "https://f84c49587847aae2d38ee792763f89f2.ctonew.app",
+  account: await auth.currentAccount().catch(() => null),
+}));
+
 /** The install snippet always targets the published widget host, not a preview proxy host. */
 export const siteOrigin = createServerFn({ method: "GET" }).handler(
   async () => "https://f84c49587847aae2d38ee792763f89f2.ctonew.app",

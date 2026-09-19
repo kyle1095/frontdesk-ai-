@@ -1,13 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { siteOrigin } from "~/server/api";
-import * as auth from "~/server/auth";
+import { installData } from "~/server/api";
 
 export const Route = createFileRoute("/install")({
   loader: async () => {
-    const origin = await siteOrigin();
-    const account = await auth.currentAccount().catch(() => null);
-    return { origin, account };
+    return await installData();
   },
   component: InstallPage,
 });
