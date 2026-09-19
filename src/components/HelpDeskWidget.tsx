@@ -76,6 +76,10 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
   const [showBranding, setShowBranding] = useState(config.showBranding ?? true);
   const [error, setError] = useState<string | null>(null);
   const skipGreetingRef = useRef(false);
+  const pendingOpenRef = useRef<{
+    action?: WidgetAction;
+    message?: string;
+  } | null>(null);
 
   const stateRef = useRef<ConversationState | null>(null);
   const conversationRef = useRef<string | null>(null);
@@ -254,23 +258,33 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
   //   new CustomEvent("frontdesk:open", { detail: { action: "start_lead" } })
   useEffect(() => {
     const onOpen = (event: Event) => {
-      const detail = (event as CustomEvent<{
-        action?: WidgetAction;
-        message?: string;
-      }>).detail;
+      const detail = (
+        event as CustomEvent<{
+          action?: WidgetAction;
+          message?: string;
+        }>
+      ).detail;
       const action = detail?.action;
       const message = detail?.message;
-      if (action || message) skipGreetingRef.current = true;
-      setOpen(true);
       if (action || message) {
-        window.setTimeout(() => {
-          sendRef.current(message ?? "", action ?? "send");
-        }, 0);
+        skipGreetingRef.current = true;
+        pendingOpenRef.current = { action, message };
       }
+      setOpen(true);
     };
     window.addEventListener("frontdesk:open", onOpen);
     return () => window.removeEventListener("frontdesk:open", onOpen);
   }, []);
+
+  useEffect(() => {
+    if (!open || !pendingOpenRef.current) return undefined;
+    const pending = pendingOpenRef.current;
+    pendingOpenRef.current = null;
+    const timer = window.setTimeout(() => {
+      sendRef.current(pending.message ?? "", pending.action ?? "send");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [open]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -486,7 +500,8 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
           </form>
           {showBranding && (
             <p className="border-t border-slate-100 bg-white px-3 py-1.5 text-center text-[10px] text-slate-400">
-              Help desk by Frontdesk AI · answers come from {config.businessName}
+              Help desk by Frontdesk AI · answers come from{" "}
+              {config.businessName}
               &apos;s own help content
             </p>
           )}
