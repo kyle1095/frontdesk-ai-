@@ -38,6 +38,12 @@ const faqSuggestions = [
   "Is Cadence HIPAA compliant?",
 ];
 
+const trapQuestions = [
+  "Do you offer reptile boarding?",
+  "Can you diagnose my dog?",
+  "Do you have a discount for new clients?",
+];
+
 const troubleSuggestions = [
   "My calendar isn't syncing",
   "Booking an appointment won't save",
@@ -214,6 +220,38 @@ function Home() {
           </div>
         </section>
 
+        <section className="border-y border-slate-200 bg-white py-12">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="rounded-2xl border border-teal-200 bg-teal-50 p-6 sm:flex sm:items-center sm:justify-between sm:gap-8">
+              <div className="max-w-2xl">
+                <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                  Try to break it
+                </p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                  Ask something outside the help content
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  These questions are not in Cadence&apos;s seeded help content.
+                  Watch the assistant say so plainly instead of inventing an
+                  answer, then offer a ticket for a human to pick up.
+                </p>
+              </div>
+              <div className="mt-5 flex flex-wrap gap-2 sm:mt-0 sm:max-w-md sm:justify-end">
+                {trapQuestions.map((question) => (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => openWidget("send", question)}
+                    className="rounded-full border border-teal-300 bg-white px-3 py-2 text-left text-sm font-medium text-teal-900 transition hover:border-teal-500 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="support" className="mx-auto max-w-6xl px-4 py-16">
           <div className="grid gap-10 lg:grid-cols-2">
             <div>
@@ -273,11 +311,21 @@ function Home() {
           </div>
 
           <p className="mt-8 text-sm leading-6 text-slate-600">
-            This whole support experience is Frontdesk AI — it answers from these {knowledgeBase.length} articles, books call slots, and files tickets with reference numbers. Add it to your site with one line, free for 50 conversations/month →{" "}
-            <a className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950" href="/install">
+            This whole support experience is Frontdesk AI — it answers from
+            these {knowledgeBase.length} articles, books call slots, and files
+            tickets with reference numbers. Add it to your site with one line,
+            free for 50 conversations/month →{" "}
+            <a
+              className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950"
+              href="/install"
+            >
               Install
-            </a>{" "}·{" "}
-            <a className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950" href="/pricing">
+            </a>{" "}
+            ·{" "}
+            <a
+              className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950"
+              href="/pricing"
+            >
               Pricing
             </a>
           </p>
