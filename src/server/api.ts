@@ -115,6 +115,7 @@ export interface OperatorPayload {
   leads: store.LeadRecord[];
   tickets: store.TicketRecord[];
   conversations: store.ConversationSummary[];
+  conversationSourceCounts: store.ConversationSourceCount[];
   searchResults: store.ConversationSearchResult[];
   knowledgeBase: store.KnowledgeBaseEntry[];
   transcript?: store.ConversationTranscript | null;
@@ -144,6 +145,7 @@ export const operatorData = createServerFn({ method: "POST" })
       leads: [],
       tickets: [],
       conversations: [],
+      conversationSourceCounts: [],
       searchResults: [],
       knowledgeBase: [],
     };
@@ -161,11 +163,12 @@ export const operatorData = createServerFn({ method: "POST" })
     }
 
     try {
-      const [plan, leads, tickets, conversations, searchResults, knowledgeBase] = await Promise.all([
+      const [plan, leads, tickets, conversations, conversationSourceCounts, searchResults, knowledgeBase] = await Promise.all([
         store.getBusinessPlanUsage(account.businessId),
         store.listLeads(account.businessId, 50),
         store.listTickets(account.businessId, 50),
         store.listConversations(account.businessId, 30),
+        store.listConversationSourceCounts(account.businessId),
         store.searchConversations(account.businessId, data.search, 30),
         store.listKnowledgeBase(account.businessId),
       ]);
@@ -180,6 +183,7 @@ export const operatorData = createServerFn({ method: "POST" })
         leads,
         tickets,
         conversations,
+        conversationSourceCounts,
         searchResults,
         knowledgeBase,
         transcript,

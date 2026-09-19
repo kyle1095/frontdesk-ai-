@@ -100,6 +100,11 @@ export interface ConversationSearchResult extends ConversationSummary {
   matchedBody: string;
 }
 
+export interface ConversationSourceCount {
+  source: string | null;
+  count: number;
+}
+
 export type TicketStatus = "new" | "in_progress" | "resolved";
 
 export interface ConversationTranscript extends ConversationSummary {
@@ -734,6 +739,22 @@ export async function searchConversations(
     source: r.source == null ? null : toText(r.source),
     entryPoint: r.entry_point == null ? null : toText(r.entry_point),
     matchedBody: toText(r.matched_body),
+  }));
+}
+
+export async function listConversationSourceCounts(
+  businessId: string,
+): Promise<ConversationSourceCount[]> {
+  await ensureSchema();
+  const rows = await query(
+    `SELECT source, count(*)::int AS count
+     FROM conversations WHERE business_id = $1
+     GROUP BY source ORDER BY count(*) DESC, source ASC NULLS LAST`,
+    [businessId],
+  );
+  return rows.map((r) => ({
+    source: r.source == null ? null : toText(r.source),
+    count: Number(r.count ?? 0),
   }));
 }
 
