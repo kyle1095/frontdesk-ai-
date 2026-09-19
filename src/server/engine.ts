@@ -756,7 +756,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
       replies: [
         {
           text: `${helpDesk.greeting}`,
-          chips: [...QUICK_CHIPS, ...sampleQuestionsFromEntries(knowledgeBase, 3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
+          chips: [...QUICK_CHIPS, ...sampleQuestionsFromEntries(entries, 3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
         },
       ],
       effects: [],
