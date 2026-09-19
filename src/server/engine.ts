@@ -29,7 +29,7 @@ import {
   type SalesSlot,
 } from "~/content/business";
 import { llm, type LlmLayer } from "./llm";
-import { retrieve, sampleQuestions, scoreKnowledge } from "./retrieval";
+import { retrieveFromKnowledgeBase, scoreKnowledgeFromEntries } from "./retrieval";
 import * as store from "./store";
 
 export type WidgetAction =
@@ -374,7 +374,15 @@ function capabilityReply(state: ConversationState): FlowResult {
 /* Flow: lead                                                          */
 /* ------------------------------------------------------------------ */
 
-function continueLead(state: ConversationState, text: string): FlowResult {
+function entryById(entries: KbEntry[], id: string): KbEntry | undefined {
+  return entries.find((entry) => entry.id === id);
+}
+
+function sampleQuestionsFromEntries(entries: KbEntry[], limit = 4): string[] {
+  return entries.slice(0, limit).map((entry) => entry.question);
+}
+
+function continueLead(state: ConversationState, text: string, entries: KbEntry[]): FlowResult {
   const lead = state.lead ?? { step: "name" as const };
   state.lead = lead;
   const replies: AgentReply[] = [];
@@ -428,7 +436,7 @@ function continueLead(state: ConversationState, text: string): FlowResult {
     need: "what do you need help with?",
   };
   if (step === "name" || step === "company" || step === "need") {
-    const [best] = scoreKnowledge(text);
+    const [best] = scoreKnowledgeFromEntries(text, entries);
     if (RE_QUESTION.test(text) && best?.confident && best.score >= 3) {
       replies.push({ text: best.entry.kind === "troubleshooting" ? troubleshootingText(best.entry) : best.entry.answer });
       replies.push({
@@ -488,7 +496,7 @@ function continueLead(state: ConversationState, text: string): FlowResult {
 /* Flow: ticket                                                        */
 /* ------------------------------------------------------------------ */
 
-function continueTicket(state: ConversationState, text: string): FlowResult {
+function continueTicket(state: ConversationState, text: string, entries: KbEntry[]): FlowResult {
   const ticket = state.ticket ?? { step: "whatDoing" as const };
   state.ticket = ticket;
   const replies: AgentReply[] = [];
@@ -506,7 +514,7 @@ function continueTicket(state: ConversationState, text: string): FlowResult {
     ticket.urgency = urgency;
     ticket.step = "file";
   } else if (ticket.step === "whatDoing") {
-    const [best] = scoreKnowledge(text);
+    const [best] = scoreKnowledgeFromEntries(text, entries);
     if (RE_QUESTION.test(text) && best?.confident && best.score >= 3 && best.entry.kind === "faq") {
       replies.push({ text: best.entry.answer });
       replies.push({ text: "Back to your ticket — what were you doing when the problem happened?" });
@@ -530,7 +538,7 @@ function continueTicket(state: ConversationState, text: string): FlowResult {
   }
 
   if (ticket.step === "file") {
-    const kb = ticket.kbId ? getKbEntry(ticket.kbId) : undefined;
+    const kb = ticket.kbId ? entryById(entries, ticket.kbId) : undefined;
     effects.push({
       kind: "file_ticket",
       draft: {
@@ -548,8 +556,8 @@ function continueTicket(state: ConversationState, text: string): FlowResult {
 /* Flow: troubleshooting                                               */
 /* ------------------------------------------------------------------ */
 
-function continueTroubleshooting(state: ConversationState, text: string, action?: WidgetAction): FlowResult {
-  const entry = state.troubleshooting ? getKbEntry(state.troubleshooting.kbId) : undefined;
+function continueTroubleshooting(state: ConversationState, text: string, action: WidgetAction | undefined, entries: KbEntry[]): FlowResult {
+  const entry = state.troubleshooting ? entryById(entries, state.troubleshooting.kbId) : undefined;
   const replies: AgentReply[] = [];
   const effects: Effect[] = [];
 
@@ -619,7 +627,7 @@ function continueTroubleshooting(state: ConversationState, text: string, action?
 /* Flow: handoff (we could not answer, ticket offered)                 */
 /* ------------------------------------------------------------------ */
 
-function continueHandoff(state: ConversationState, text: string): FlowResult {
+function continueHandoff(state: ConversationState, text: string, entries: KbEntry[]): FlowResult {
   const question = state.handoff?.question ?? text;
   const replies: AgentReply[] = [];
 
@@ -630,7 +638,7 @@ function continueHandoff(state: ConversationState, text: string): FlowResult {
     return resetToIdle(state, "Understood — I won't file anything.");
   }
 
-  const [best] = scoreKnowledge(text);
+  const [best] = scoreKnowledgeFromEntries(text, entries);
   if (best?.confident) {
     state.flow = "idle";
     state.handoff = undefined;
@@ -664,7 +672,7 @@ function continueHandoff(state: ConversationState, text: string): FlowResult {
 /* runFlow — synchronous conversation logic                            */
 /* ------------------------------------------------------------------ */
 
-export function runFlow(input: { state: ConversationState; message: string; action?: WidgetAction }): FlowResult {
+export function runFlow(input: { state: ConversationState; message: string; action?: WidgetAction }, entries: KbEntry[] = knowledgeBase): FlowResult {
   const state = normaliseState(input.state);
   const action = input.action ?? "send";
   const text = (input.message ?? "").trim();
@@ -682,7 +690,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
       replies: [
         {
           text: "Sure — ask me anything about Cadence. These come up a lot:",
-          chips: sampleQuestions(5).map((q) => ({ label: q, action: "send" as WidgetAction })),
+          chips: sampleQuestionsFromEntries(entries, 5).map((q) => ({ label: q, action: "send" as WidgetAction })),
         },
       ],
       effects: [],
@@ -721,10 +729,10 @@ export function runFlow(input: { state: ConversationState; message: string; acti
   }
 
   /* --- continue an in-flight flow --- */
-  if (state.flow === "lead") return continueLead(state, text);
-  if (state.flow === "ticket") return continueTicket(state, text);
-  if (state.flow === "troubleshooting") return continueTroubleshooting(state, text, action);
-  if (state.flow === "handoff") return continueHandoff(state, text);
+  if (state.flow === "lead") return continueLead(state, text, entries);
+  if (state.flow === "ticket") return continueTicket(state, text, entries);
+  if (state.flow === "troubleshooting") return continueTroubleshooting(state, text, action, entries);
+  if (state.flow === "handoff") return continueHandoff(state, text, entries);
 
   /* --- idle: classify --- */
   if (RE_LEAD.test(text)) {
@@ -735,7 +743,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
   }
   if (RE_TICKET.test(text)) return startTicket(state, { subject: text.slice(0, 120), whatDoing: text });
 
-  const best = retrieve(text);
+  const best = retrieveFromKnowledgeBase(text, entries);
   if (best) {
     if (best.entry.kind === "troubleshooting") return startTroubleshooting(state, best.entry, text);
     return answerFaq(state, best.entry);
@@ -749,7 +757,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
       replies: [
         {
           text: `${helpDesk.greeting}`,
-          chips: [...QUICK_CHIPS, ...sampleQuestions(3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
+          chips: [...QUICK_CHIPS, ...sampleQuestionsFromEntries(entries, 3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
         },
       ],
       effects: [],
@@ -788,6 +796,8 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   let state = normaliseState(input.state);
   let storageError: string | undefined;
   let storageOk = false;
+  let knowledgeEntries: KbEntry[] = [];
+
   let planUsage: store.BusinessPlanUsage = {
     plan: {
       id: "free",
@@ -811,6 +821,12 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
     storageOk = true;
   } catch (err) {
     storageError = errText(err);
+  }
+
+  try {
+    knowledgeEntries = await store.listKnowledgeBase(businessId);
+  } catch (err) {
+    storageError = storageError ?? errText(err);
   }
 
   /* Load authoritative state from the database when we can. */
@@ -872,7 +888,7 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   }
 
   /* --- conversation logic --- */
-  let result = runFlow({ state, message, action });
+  let result = runFlow({ state, message, action }, knowledgeEntries);
 
   /* Optional LLM assist: only when retrieval was NOT confident, let the model
      pick among the top candidates. Guarded — it can only return a KB entry. */
@@ -882,12 +898,12 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
       // deterministic confidence bar. A weak lexical overlap (for example
       // "quantum encryption" sharing only "encryption" with the security FAQ)
       // must remain a human handoff, never an invitation for the model to guess.
-      const candidates = scoreKnowledge(message)
+      const candidates = scoreKnowledgeFromEntries(message, knowledgeEntries)
         .filter((m) => m.confident)
         .slice(0, 4)
         .map((m) => ({ id: m.entry.id, title: m.entry.title, question: m.entry.question }));
       const picked = await llmLayer.route(message, candidates);
-      const entry = picked ? getKbEntry(picked) : undefined;
+      const entry = picked ? entryById(knowledgeEntries, picked) : undefined;
       if (entry) {
         result =
           entry.kind === "troubleshooting"
@@ -1024,6 +1040,6 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
 export function greeting(): AgentReply {
   return {
     text: helpDesk.greeting,
-    chips: [...QUICK_CHIPS, ...sampleQuestions(3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
+    chips: [...QUICK_CHIPS, ...sampleQuestionsFromEntries(entries, 3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
   };
 }
