@@ -18,6 +18,7 @@ export interface Account {
   businessId: string;
   businessName: string;
   businessSlug: string;
+  plan: string;
 }
 
 export function normaliseEmail(value: string) { return value.trim().toLowerCase(); }
@@ -64,12 +65,12 @@ export async function currentAccount(): Promise<Account | null> {
   const token = getCookie(SESSION_COOKIE);
   if (!token) return null;
   await store.ensureSchema();
-  const rows = await store.query(`SELECT a.id, a.email, b.id AS business_id, b.name AS business_name, b.slug AS business_slug
+  const rows = await store.query(`SELECT a.id, a.email, b.id AS business_id, b.name AS business_name, b.slug AS business_slug, b.plan
     FROM sessions s JOIN accounts a ON a.id = s.account_id JOIN businesses b ON b.id = a.business_id
     WHERE s.token = $1 AND s.expires_at > now()`, [token]);
   const row = rows[0];
   if (!row) return null;
-  return { id: String(row.id), email: String(row.email), businessId: String(row.business_id), businessName: String(row.business_name), businessSlug: String(row.business_slug) };
+  return { id: String(row.id), email: String(row.email), businessId: String(row.business_id), businessName: String(row.business_name), businessSlug: String(row.business_slug), plan: String(row.plan ?? "free") };
 }
 
 export async function signup(email: string, password: string, businessName: string): Promise<{ ok: boolean; error?: string; account?: Account }> {
@@ -89,7 +90,7 @@ export async function signup(email: string, password: string, businessName: stri
     await store.query("INSERT INTO businesses (id, name, slug) VALUES ($1, $2, $3)", [businessId, businessName, slug]);
     const hash = await hashPassword(password);
     await store.query("INSERT INTO accounts (id, email, password_hash, business_id) VALUES ($1, $2, $3, $4)", [accountId, email, hash, businessId]);
-    const account = { id: accountId, email, businessId, businessName, businessSlug: slug };
+    const account = { id: accountId, email, businessId, businessName, businessSlug: slug, plan: "free" };
     await createSession(accountId);
     return { ok: true, account };
   } catch (error) {
@@ -103,10 +104,10 @@ export async function signup(email: string, password: string, businessName: stri
 export async function login(email: string, password: string): Promise<{ ok: boolean; error?: string; account?: Account }> {
   email = normaliseEmail(email);
   await store.ensureSchema();
-  const rows = await store.query(`SELECT a.id, a.email, a.password_hash, b.id AS business_id, b.name AS business_name, b.slug AS business_slug FROM accounts a JOIN businesses b ON b.id = a.business_id WHERE a.email = $1`, [email]);
+  const rows = await store.query(`SELECT a.id, a.email, a.password_hash, b.id AS business_id, b.name AS business_name, b.slug AS business_slug, b.plan FROM accounts a JOIN businesses b ON b.id = a.business_id WHERE a.email = $1`, [email]);
   const row = rows[0];
   if (!row || !(await verifyPassword(password, String(row.password_hash)))) return { ok: false, error: "Email or password is incorrect." };
-  const account = { id: String(row.id), email: String(row.email), businessId: String(row.business_id), businessName: String(row.business_name), businessSlug: String(row.business_slug) };
+  const account = { id: String(row.id), email: String(row.email), businessId: String(row.business_id), businessName: String(row.business_name), businessSlug: String(row.business_slug), plan: String(row.plan ?? "free") };
   await createSession(account.id);
   return { ok: true, account };
 }

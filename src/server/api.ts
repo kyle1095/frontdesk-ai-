@@ -59,6 +59,13 @@ export const authMe = createServerFn({ method: "GET" }).handler(async () =>
   auth.currentAccount(),
 );
 
+export const accountPlan = createServerFn({ method: "GET" }).handler(async () => {
+  const account = await auth.currentAccount();
+  if (!account) return { ok: false as const, error: "Sign-in required." };
+  const plan = await store.getBusinessPlanUsage(account.businessId);
+  return { ok: true as const, account, plan };
+});
+
 /* ------------------------------------------------------------------ */
 /* Chat                                                                */
 /* ------------------------------------------------------------------ */
@@ -97,6 +104,7 @@ export interface OperatorPayload {
   ok: boolean;
   error?: string;
   account?: auth.Account;
+  plan?: store.BusinessPlanUsage;
   storage: store.StorageStatus;
   leads: store.LeadRecord[];
   tickets: store.TicketRecord[];
@@ -145,7 +153,8 @@ export const operatorData = createServerFn({ method: "POST" })
     }
 
     try {
-      const [leads, tickets, conversations, searchResults] = await Promise.all([
+      const [plan, leads, tickets, conversations, searchResults] = await Promise.all([
+        store.getBusinessPlanUsage(account.businessId),
         store.listLeads(account.businessId, 50),
         store.listTickets(account.businessId, 50),
         store.listConversations(account.businessId, 30),
@@ -157,6 +166,7 @@ export const operatorData = createServerFn({ method: "POST" })
       return {
         ok: true,
         account,
+        plan,
         storage,
         leads,
         tickets,

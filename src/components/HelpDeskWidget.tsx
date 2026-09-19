@@ -43,6 +43,8 @@ export interface HelpDeskWidgetConfig {
   localPreview?: boolean;
   /** Optional public API endpoint used by cross-origin iframe installs. */
   apiUrl?: string;
+  /** Whether the Frontdesk AI footer is initially shown. Free plans force it on server-side. */
+  showBranding?: boolean;
   /** Where the launcher sits. Defaults to the bottom-right. */
   position?: "right" | "left";
 }
@@ -71,6 +73,7 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
   const [busy, setBusy] = useState(false);
   const [typing, setTyping] = useState(false);
   const [storage, setStorage] = useState<StorageInfo | null>(null);
+  const [showBranding, setShowBranding] = useState(config.showBranding ?? true);
   const [error, setError] = useState<string | null>(null);
 
   const stateRef = useRef<ConversationState | null>(null);
@@ -178,6 +181,9 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
           stateRef.current = res.state;
           conversationRef.current = res.conversationId;
           setStorage(res.storage);
+          if (typeof res.brandingRequired === "boolean") {
+            setShowBranding(res.brandingRequired);
+          }
           for (const reply of res.replies) {
             await pushAgent(reply);
           }
@@ -458,10 +464,12 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
               </svg>
             </button>
           </form>
-          <p className="border-t border-slate-100 bg-white px-3 py-1.5 text-center text-[10px] text-slate-400">
-            Help desk by Frontdesk AI · answers come from {config.businessName}
-            &apos;s own help content
-          </p>
+          {showBranding && (
+            <p className="border-t border-slate-100 bg-white px-3 py-1.5 text-center text-[10px] text-slate-400">
+              Help desk by Frontdesk AI · answers come from {config.businessName}
+              &apos;s own help content
+            </p>
+          )}
         </section>
       )}
     </>

@@ -17,6 +17,7 @@
  */
 
 import { sql as neonSql } from "~/db";
+import { getPlan, type PlanConfig, type PlanId } from "~/config/plans";
 
 export type Row = Record<string, unknown>;
 
@@ -25,6 +26,13 @@ export interface StorageStatus {
   reachable: boolean;
   driver: "neon-http" | "tcp" | "none";
   error?: string;
+}
+
+export interface BusinessPlanUsage {
+  plan: PlanConfig;
+  used: number;
+  limit: number;
+  brandingRequired: boolean;
 }
 
 export interface LeadInput {
@@ -161,8 +169,11 @@ const SCHEMA = [
      id text PRIMARY KEY,
      name text NOT NULL,
      slug text UNIQUE NOT NULL,
+     plan text NOT NULL DEFAULT 'free',
      created_at timestamptz NOT NULL DEFAULT now()
    )`,
+  `ALTER TABLE businesses ADD COLUMN IF NOT EXISTS plan text NOT NULL DEFAULT 'free'`,
+  `UPDATE businesses SET plan = 'free' WHERE plan IS NULL OR trim(plan) = ''`,
   `CREATE TABLE IF NOT EXISTS accounts (
      id text PRIMARY KEY,
      email text UNIQUE NOT NULL,
@@ -232,6 +243,7 @@ const SCHEMA = [
   `UPDATE tickets SET status = 'new' WHERE status = 'open'`,
   `CREATE SEQUENCE IF NOT EXISTS ticket_reference_seq START WITH 1042`,
   `CREATE INDEX IF NOT EXISTS messages_conversation_idx ON messages (conversation_id, id)`,
+  `CREATE INDEX IF NOT EXISTS conversations_business_created_idx ON conversations (business_id, created_at)`,
 ];
 
 let schemaReady: Promise<void> | null = null;
@@ -290,6 +302,32 @@ export async function resolveBusinessId(value: string): Promise<string | null> {
     [key],
   );
   return rows[0]?.id == null ? null : toText(rows[0].id);
+}
+
+export async function getBusinessPlanUsage(
+  businessId: string,
+): Promise<BusinessPlanUsage> {
+  await ensureSchema();
+  const rows = await query(
+    `SELECT b.plan, count(c.id)::int AS used
+     FROM businesses b
+     LEFT JOIN conversations c
+       ON c.business_id = b.id
+      AND c.created_at >= date_trunc('month', now())
+      AND c.created_at < date_trunc('month', now()) + interval '1 month'
+     WHERE b.id = $1
+     GROUP BY b.id, b.plan`,
+    [businessId],
+  );
+  const row = rows[0];
+  const plan = getPlan(row?.plan == null ? "free" : String(row.plan));
+  const used = Number(row?.used ?? 0);
+  return {
+    plan,
+    used,
+    limit: plan.conversationLimit,
+    brandingRequired: plan.branding,
+  };
 }
 
 export async function createConversation(

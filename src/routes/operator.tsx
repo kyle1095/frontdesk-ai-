@@ -186,6 +186,24 @@ function OperatorPage() {
           </div>
         )}
 
+        {data?.plan && (
+          <section className="rounded-2xl border border-teal-200 bg-teal-50 p-5" aria-labelledby="plan-heading">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Current plan</p>
+                <h2 id="plan-heading" className="mt-1 text-xl font-bold text-slate-900">{data.plan.plan.name}</h2>
+                <p className="mt-1 text-sm text-slate-700">{data.plan.plan.description}</p>
+              </div>
+              <a href="/pricing" className="rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800">View plans</a>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-700">
+              <span><strong>{data.plan.used.toLocaleString()}</strong> of {data.plan.limit.toLocaleString()} conversations this month</span>
+              <span>{data.plan.plan.seats} seat{data.plan.plan.seats === 1 ? "" : "s"}</span>
+              <span>{data.plan.brandingRequired ? "Frontdesk AI branding on" : "Branding removed"}</span>
+            </div>
+          </section>
+        )}
+
         {data && !data.storage.reachable && (
           <p className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             Nothing can be stored while the database is not reachable, so there
