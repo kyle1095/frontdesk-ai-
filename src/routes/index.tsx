@@ -281,32 +281,83 @@ function Home() {
                 ))}
               </ul>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Common problems it can fix
-              </h3>
-              <ul className="mt-4 grid gap-2 text-sm text-slate-700">
-                {troubleSuggestions.map((topic) => (
-                  <li key={topic} className="flex items-start gap-2">
-                    <span
-                      aria-hidden
-                      className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={openWidget}
-                      className="text-left hover:text-teal-800"
-                    >
-                      {topic}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
-                If the help desk does not know an answer, it says so and offers
-                to pass the question to a human — it is not allowed to invent
-                pricing, policy or a fix.
-              </p>
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Operator handoff preview
+                    </p>
+                    <h3 className="mt-1 text-lg font-semibold text-slate-900">
+                      What a human sees next
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    Illustrative
+                  </span>
+                </div>
+                <div className="mt-5 space-y-3">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex items-center justify-between gap-3 text-xs font-semibold text-amber-900">
+                      <span>Ticket filed</span>
+                      <span>Example</span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      Ref TK-1042 · Calendar sync question
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      The transcript and customer&apos;s original question stay
+                      attached.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+                    <div className="flex items-center justify-between gap-3 text-xs font-semibold text-teal-900">
+                      <span>Call slot offered</span>
+                      <span>Example</span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      Tue 10:00 ET · 30 minutes
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      A human confirms the selected demo time after the request
+                      is saved.
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs leading-5 text-slate-500">
+                  Example only — this preview is not a live ticket or calendar
+                  slot. The widget creates real handoffs when its storage is
+                  connected.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                  Common problems it can fix
+                </h3>
+                <ul className="mt-4 grid gap-2 text-sm text-slate-700">
+                  {troubleSuggestions.map((topic) => (
+                    <li key={topic} className="flex items-start gap-2">
+                      <span
+                        aria-hidden
+                        className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={openWidget}
+                        className="text-left hover:text-teal-800"
+                      >
+                        {topic}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
+                  If the help desk does not know an answer, it says so and
+                  offers to pass the question to a human — it is not allowed to
+                  invent pricing, policy or a fix.
+                </p>
+              </div>
             </div>
           </div>
 
