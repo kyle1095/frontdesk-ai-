@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { captureAttributionSource } from "~/client/attribution";
 import { authSignup } from "~/server/api";
 
 export const Route = createFileRoute("/signup")({
@@ -12,13 +13,18 @@ function SignupPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [signupSource, setSignupSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSignupSource(captureAttributionSource());
+  }, []);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const result = await authSignup({ data: { businessName, email, password } });
+      const result = await authSignup({ data: { businessName, email, password, signupSource } });
       if (!result.ok) {
         setError(result.error ?? "Could not create the account.");
         return;

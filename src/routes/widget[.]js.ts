@@ -8,11 +8,13 @@ const LOADER = String.raw`/* Frontdesk AI widget loader — paste this script be
 
   var origin = new URL(script.src, window.location.href).origin;
   var params = new URLSearchParams();
+  var pageRef = new URLSearchParams(window.location.search).get("ref");
   var accent = script.getAttribute("data-accent-color");
   var position = script.getAttribute("data-position");
   var business = script.getAttribute("data-business") || "cadence";
   if (accent) params.set("accent", accent);
   if (position === "left") params.set("position", "left");
+  if (pageRef && pageRef.trim()) params.set("ref", pageRef.trim().slice(0, 120));
   if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(business)) params.set("business", business);
 
   var frame = document.createElement("iframe");

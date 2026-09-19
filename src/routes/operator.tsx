@@ -32,6 +32,10 @@ function fmt(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function sourceLabel(source: string | null): string {
+  return source ?? "Unattributed";
+}
+
 function OperatorPage() {
   const [data, setData] = useState<OperatorPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +76,7 @@ function OperatorPage() {
           leads: [],
           tickets: [],
           conversations: [],
+          conversationSourceCounts: [],
           searchResults: [],
         });
       } finally {
@@ -221,6 +226,16 @@ function OperatorPage() {
               {data.leads.length} lead(s) · {data.tickets.length} ticket(s) ·{" "}
               {data.conversations.length} conversation(s)
             </span>
+            {data.conversationSourceCounts.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="Conversations by source">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">By source</span>
+                {data.conversationSourceCounts.map((item) => (
+                  <span key={item.source ?? "unattributed"} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                    {sourceLabel(item.source)} · {item.count}
+                  </span>
+                ))}
+              </div>
+            )}
             <button
               type="button"
               onClick={() =>
@@ -624,6 +639,16 @@ function OperatorPage() {
                   <span className="font-mono text-xs text-slate-500">
                     {conversation.id}
                   </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                      {sourceLabel(conversation.source)}
+                    </span>
+                    {conversation.entryPoint && (
+                      <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs text-teal-800">
+                        Chip: {conversation.entryPoint}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-slate-600">
                     {conversation.messageCount} message(s)
                   </span>

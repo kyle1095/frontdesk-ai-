@@ -32,10 +32,12 @@ export const authSignup = createServerFn({ method: "POST" })
       password: typeof obj.password === "string" ? obj.password : "",
       businessName:
         typeof obj.businessName === "string" ? obj.businessName : "",
+      signupSource:
+        typeof obj.signupSource === "string" ? obj.signupSource.slice(0, 120) : null,
     };
   })
   .handler(async ({ data }): Promise<AuthResponse> =>
-    auth.signup(data.email, data.password, data.businessName),
+    auth.signup(data.email, data.password, data.businessName, data.signupSource),
   );
 
 export const authLogin = createServerFn({ method: "POST" })
@@ -76,6 +78,8 @@ export interface ChatRequest {
   message?: string;
   action?: TurnInput["action"];
   state?: unknown;
+  source?: string | null;
+  entryPoint?: string | null;
 }
 
 export const chatTurn = createServerFn({ method: "POST" })
@@ -90,6 +94,8 @@ export const chatTurn = createServerFn({ method: "POST" })
         typeof obj.message === "string" ? obj.message.slice(0, 2000) : "",
       action: typeof obj.action === "string" ? obj.action : "send",
       state: obj.state ?? initialState(),
+      source: typeof obj.source === "string" ? obj.source.slice(0, 120) : null,
+      entryPoint: typeof obj.entryPoint === "string" ? obj.entryPoint.slice(0, 200) : null,
     } satisfies ChatRequest;
   })
   .handler(async ({ data }): Promise<TurnResult> => {
@@ -109,6 +115,7 @@ export interface OperatorPayload {
   leads: store.LeadRecord[];
   tickets: store.TicketRecord[];
   conversations: store.ConversationSummary[];
+  conversationSourceCounts: store.ConversationSourceCount[];
   searchResults: store.ConversationSearchResult[];
   knowledgeBase: store.KnowledgeBaseEntry[];
   transcript?: store.ConversationTranscript | null;
@@ -138,6 +145,7 @@ export const operatorData = createServerFn({ method: "POST" })
       leads: [],
       tickets: [],
       conversations: [],
+      conversationSourceCounts: [],
       searchResults: [],
       knowledgeBase: [],
     };
@@ -155,11 +163,12 @@ export const operatorData = createServerFn({ method: "POST" })
     }
 
     try {
-      const [plan, leads, tickets, conversations, searchResults, knowledgeBase] = await Promise.all([
+      const [plan, leads, tickets, conversations, conversationSourceCounts, searchResults, knowledgeBase] = await Promise.all([
         store.getBusinessPlanUsage(account.businessId),
         store.listLeads(account.businessId, 50),
         store.listTickets(account.businessId, 50),
         store.listConversations(account.businessId, 30),
+        store.listConversationSourceCounts(account.businessId),
         store.searchConversations(account.businessId, data.search, 30),
         store.listKnowledgeBase(account.businessId),
       ]);
@@ -174,6 +183,7 @@ export const operatorData = createServerFn({ method: "POST" })
         leads,
         tickets,
         conversations,
+        conversationSourceCounts,
         searchResults,
         knowledgeBase,
         transcript,

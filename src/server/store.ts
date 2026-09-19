@@ -92,10 +92,17 @@ export interface ConversationSummary {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  source: string | null;
+  entryPoint: string | null;
 }
 
 export interface ConversationSearchResult extends ConversationSummary {
   matchedBody: string;
+}
+
+export interface ConversationSourceCount {
+  source: string | null;
+  count: number;
 }
 
 export type TicketStatus = "new" | "in_progress" | "resolved";
@@ -191,6 +198,7 @@ const SCHEMA = [
      created_at timestamptz NOT NULL DEFAULT now()
    )`,
   `ALTER TABLE businesses ADD COLUMN IF NOT EXISTS plan text NOT NULL DEFAULT 'free'`,
+  `ALTER TABLE businesses ADD COLUMN IF NOT EXISTS signup_source text`,
   `UPDATE businesses SET plan = 'free' WHERE plan IS NULL OR trim(plan) = ''`,
   `CREATE TABLE IF NOT EXISTS accounts (
      id text PRIMARY KEY,
@@ -218,9 +226,13 @@ const SCHEMA = [
      business_id text NOT NULL,
      channel text NOT NULL DEFAULT 'widget',
      state jsonb NOT NULL DEFAULT '{}'::jsonb,
+     source text,
+     entry_point text,
      created_at timestamptz NOT NULL DEFAULT now(),
      updated_at timestamptz NOT NULL DEFAULT now()
    )`,
+  `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS source text`,
+  `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS entry_point text`,
   `CREATE TABLE IF NOT EXISTS messages (
      id bigserial PRIMARY KEY,
      conversation_id text NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -415,6 +427,11 @@ function validKnowledgeInput(input: KnowledgeBaseInput): string | null {
   return null;
 }
 
+export async function updateBusinessSignupSource(businessId: string, source: string | null): Promise<void> {
+  await ensureSchema();
+  await query(`UPDATE businesses SET signup_source = $2 WHERE id = $1`, [businessId, source]);
+}
+
 export async function createKnowledgeBaseEntry(
   businessId: string,
   input: KnowledgeBaseInput,
@@ -500,12 +517,15 @@ export async function getBusinessPlanUsage(
 export async function createConversation(
   businessId: string,
   initialState: unknown,
+  source?: string | null,
+  entryPoint?: string | null,
 ): Promise<string> {
   await ensureSchema();
   const id = crypto.randomUUID();
   await query(
-    `INSERT INTO conversations (id, business_id, state) VALUES ($1, $2, $3::jsonb)`,
-    [id, businessId, initialState ?? {}],
+    `INSERT INTO conversations (id, business_id, state, source, entry_point)
+     VALUES ($1, $2, $3::jsonb, $4, $5)`,
+    [id, businessId, initialState ?? {}, source ?? null, entryPoint ?? null],
   );
   return id;
 }
@@ -698,7 +718,7 @@ export async function searchConversations(
   const term = queryText.trim().slice(0, 200);
   if (!term) return [];
   const rows = await query(
-    `SELECT c.id, c.business_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.business_id, c.source, c.entry_point, c.created_at, c.updated_at,
             (SELECT count(*) FROM messages all_messages WHERE all_messages.conversation_id = c.id) AS message_count,
             (SELECT matched.body FROM messages matched
              WHERE matched.conversation_id = c.id AND matched.body ILIKE '%' || $2 || '%'
@@ -716,7 +736,25 @@ export async function searchConversations(
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
     messageCount: Number(r.message_count ?? 0),
+    source: r.source == null ? null : toText(r.source),
+    entryPoint: r.entry_point == null ? null : toText(r.entry_point),
     matchedBody: toText(r.matched_body),
+  }));
+}
+
+export async function listConversationSourceCounts(
+  businessId: string,
+): Promise<ConversationSourceCount[]> {
+  await ensureSchema();
+  const rows = await query(
+    `SELECT source, count(*)::int AS count
+     FROM conversations WHERE business_id = $1
+     GROUP BY source ORDER BY count(*) DESC, source ASC NULLS LAST`,
+    [businessId],
+  );
+  return rows.map((r) => ({
+    source: r.source == null ? null : toText(r.source),
+    count: Number(r.count ?? 0),
   }));
 }
 
@@ -726,7 +764,7 @@ export async function listConversations(
 ): Promise<ConversationSummary[]> {
   await ensureSchema();
   const rows = await query(
-    `SELECT c.id, c.business_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.business_id, c.source, c.entry_point, c.created_at, c.updated_at,
             (SELECT count(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count
      FROM conversations c WHERE c.business_id = $1 ORDER BY c.updated_at DESC LIMIT $2`,
     [businessId, limit],
@@ -737,6 +775,8 @@ export async function listConversations(
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
     messageCount: Number(r.message_count ?? 0),
+    source: r.source == null ? null : toText(r.source),
+    entryPoint: r.entry_point == null ? null : toText(r.entry_point),
   }));
 }
 

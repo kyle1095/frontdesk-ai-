@@ -73,9 +73,10 @@ export async function currentAccount(): Promise<Account | null> {
   return { id: String(row.id), email: String(row.email), businessId: String(row.business_id), businessName: String(row.business_name), businessSlug: String(row.business_slug), plan: String(row.plan ?? "free") };
 }
 
-export async function signup(email: string, password: string, businessName: string): Promise<{ ok: boolean; error?: string; account?: Account }> {
+export async function signup(email: string, password: string, businessName: string, signupSource?: string | null): Promise<{ ok: boolean; error?: string; account?: Account }> {
   email = normaliseEmail(email);
   businessName = businessName.trim().slice(0, 120);
+  signupSource = signupSource?.trim().slice(0, 120) || null;
   if (!validEmail(email)) return { ok: false, error: "Enter a valid email address." };
   if (password.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
   if (businessName.length < 2) return { ok: false, error: "Enter a business name." };
@@ -87,7 +88,7 @@ export async function signup(email: string, password: string, businessName: stri
   const businessId = randomUUID();
   const accountId = randomUUID();
   try {
-    await store.query("INSERT INTO businesses (id, name, slug) VALUES ($1, $2, $3)", [businessId, businessName, slug]);
+    await store.query("INSERT INTO businesses (id, name, slug, signup_source) VALUES ($1, $2, $3, $4)", [businessId, businessName, slug, signupSource]);
     const hash = await hashPassword(password);
     await store.query("INSERT INTO accounts (id, email, password_hash, business_id) VALUES ($1, $2, $3, $4)", [accountId, email, hash, businessId]);
     const account = { id: accountId, email, businessId, businessName, businessSlug: slug, plan: "free" };
