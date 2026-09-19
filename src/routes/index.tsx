@@ -26,7 +26,10 @@ const widgetConfig: HelpDeskWidgetConfig = {
   greeting: helpDesk.greeting,
   accent: "#0f766e",
   quickActions: [...helpDesk.quickActions],
-  suggestions: [...helpDesk.suggestions],
+  suggestions: [
+    ...helpDesk.suggestions,
+    "Is Cadence suitable for veterinary clinics?",
+  ],
   position: "right",
 };
 
@@ -36,6 +39,7 @@ const faqSuggestions = [
   "Which calendars do you sync with?",
   "How do I set up Cadence?",
   "Is Cadence HIPAA compliant?",
+  "Is Cadence suitable for veterinary clinics?",
 ];
 
 const trapQuestions = [
