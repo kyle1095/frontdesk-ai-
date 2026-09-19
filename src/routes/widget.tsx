@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { HelpDeskWidget } from "~/components/HelpDeskWidget";
 import { business, helpDesk } from "~/content/business";
+import { widgetBusiness } from "~/server/api";
 
 export const Route = createFileRoute("/widget")({
   component: WidgetPage,
@@ -12,6 +13,7 @@ function WidgetPage() {
     accent: "#0f766e",
     position: "right" as const,
     businessSlug: "cadence",
+    businessName: business.name,
   });
 
   useEffect(() => {
@@ -24,6 +26,9 @@ function WidgetPage() {
       position,
       businessSlug,
     });
+    void widgetBusiness({ data: { businessId: businessSlug } }).then((profile) => {
+      setOptions((current) => ({ ...current, businessName: profile.name }));
+    }).catch(() => {});
     document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";
     document.body.style.margin = "0";
@@ -32,7 +37,7 @@ function WidgetPage() {
   const config = useMemo(
     () => ({
       businessId: options.businessSlug,
-      businessName: business.name,
+      businessName: options.businessName,
       title: `${business.name} support`,
       subtitle: "Answers, fixes, tickets and demos",
       greeting: helpDesk.greeting,

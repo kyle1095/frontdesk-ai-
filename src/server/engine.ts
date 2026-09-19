@@ -22,14 +22,13 @@
 
 import {
   business,
-  getKbEntry,
   helpDesk,
   upcomingSalesSlots,
   type KbEntry,
   type SalesSlot,
 } from "~/content/business";
 import { llm, type LlmLayer } from "./llm";
-import { retrieve, sampleQuestions, scoreKnowledge } from "./retrieval";
+import { retrieveFromKnowledgeBase, scoreKnowledgeFromEntries } from "./retrieval";
 import * as store from "./store";
 
 export type WidgetAction =
@@ -337,7 +336,7 @@ function startTroubleshooting(state: ConversationState, entry: KbEntry, startedW
   };
 }
 
-function unknownHandoff(state: ConversationState, question: string): FlowResult {
+function unknownHandoff(state: ConversationState, question: string, businessName = business.name): FlowResult {
   state.flow = "handoff";
   state.handoff = { question };
   return {
@@ -356,13 +355,13 @@ function unknownHandoff(state: ConversationState, question: string): FlowResult 
   };
 }
 
-function capabilityReply(state: ConversationState): FlowResult {
+function capabilityReply(state: ConversationState, businessName = business.name): FlowResult {
   state.flow = "idle";
   return {
     state,
     replies: [
       {
-        text: `I'm the ${business.name} assistant, running on Frontdesk AI. I can:\n• answer questions about ${business.name} — what it does, plans, the free trial, integrations, setup, security;\n• walk you through fixes for common problems;\n• book you a 30 minute demo with a specialist;\n• file a ticket with a reference number if you need a human.\n\nI only answer from ${business.name}'s own help content, so if something isn't in there I'll say so rather than guess.`,
+        text: `I'm the ${businessName} assistant, running on Frontdesk AI. I can:\n• answer questions about ${business.name} — what it does, plans, the free trial, integrations, setup, security;\n• walk you through fixes for common problems;\n• book you a 30 minute demo with a specialist;\n• file a ticket with a reference number if you need a human.\n\nI only answer from ${business.name}'s own help content, so if something isn't in there I'll say so rather than guess.`,
         chips: QUICK_CHIPS,
       },
     ],
@@ -374,7 +373,15 @@ function capabilityReply(state: ConversationState): FlowResult {
 /* Flow: lead                                                          */
 /* ------------------------------------------------------------------ */
 
-function continueLead(state: ConversationState, text: string): FlowResult {
+function entryById(entries: KbEntry[], id: string): KbEntry | undefined {
+  return entries.find((entry) => entry.id === id);
+}
+
+function sampleQuestionsFromEntries(entries: KbEntry[], limit = 4): string[] {
+  return entries.slice(0, limit).map((entry) => entry.question);
+}
+
+function continueLead(state: ConversationState, text: string, entries: KbEntry[]): FlowResult {
   const lead = state.lead ?? { step: "name" as const };
   state.lead = lead;
   const replies: AgentReply[] = [];
@@ -428,7 +435,7 @@ function continueLead(state: ConversationState, text: string): FlowResult {
     need: "what do you need help with?",
   };
   if (step === "name" || step === "company" || step === "need") {
-    const [best] = scoreKnowledge(text);
+    const [best] = scoreKnowledgeFromEntries(text, entries);
     if (RE_QUESTION.test(text) && best?.confident && best.score >= 3) {
       replies.push({ text: best.entry.kind === "troubleshooting" ? troubleshootingText(best.entry) : best.entry.answer });
       replies.push({
@@ -488,7 +495,7 @@ function continueLead(state: ConversationState, text: string): FlowResult {
 /* Flow: ticket                                                        */
 /* ------------------------------------------------------------------ */
 
-function continueTicket(state: ConversationState, text: string): FlowResult {
+function continueTicket(state: ConversationState, text: string, entries: KbEntry[]): FlowResult {
   const ticket = state.ticket ?? { step: "whatDoing" as const };
   state.ticket = ticket;
   const replies: AgentReply[] = [];
@@ -506,7 +513,7 @@ function continueTicket(state: ConversationState, text: string): FlowResult {
     ticket.urgency = urgency;
     ticket.step = "file";
   } else if (ticket.step === "whatDoing") {
-    const [best] = scoreKnowledge(text);
+    const [best] = scoreKnowledgeFromEntries(text, entries);
     if (RE_QUESTION.test(text) && best?.confident && best.score >= 3 && best.entry.kind === "faq") {
       replies.push({ text: best.entry.answer });
       replies.push({ text: "Back to your ticket — what were you doing when the problem happened?" });
@@ -530,7 +537,7 @@ function continueTicket(state: ConversationState, text: string): FlowResult {
   }
 
   if (ticket.step === "file") {
-    const kb = ticket.kbId ? getKbEntry(ticket.kbId) : undefined;
+    const kb = ticket.kbId ? entryById(entries, ticket.kbId) : undefined;
     effects.push({
       kind: "file_ticket",
       draft: {
@@ -548,8 +555,8 @@ function continueTicket(state: ConversationState, text: string): FlowResult {
 /* Flow: troubleshooting                                               */
 /* ------------------------------------------------------------------ */
 
-function continueTroubleshooting(state: ConversationState, text: string, action?: WidgetAction): FlowResult {
-  const entry = state.troubleshooting ? getKbEntry(state.troubleshooting.kbId) : undefined;
+function continueTroubleshooting(state: ConversationState, text: string, action: WidgetAction | undefined, entries: KbEntry[]): FlowResult {
+  const entry = state.troubleshooting ? entryById(entries, state.troubleshooting.kbId) : undefined;
   const replies: AgentReply[] = [];
   const effects: Effect[] = [];
 
@@ -593,7 +600,7 @@ function continueTroubleshooting(state: ConversationState, text: string, action?
   }
 
   // Something else asked mid-flow: answer it if we can, then check back in.
-  const [best] = scoreKnowledge(sub);
+  const [best] = scoreKnowledgeFromEntries(sub, entries);
   if (best?.confident) {
     return {
       state,
@@ -619,7 +626,7 @@ function continueTroubleshooting(state: ConversationState, text: string, action?
 /* Flow: handoff (we could not answer, ticket offered)                 */
 /* ------------------------------------------------------------------ */
 
-function continueHandoff(state: ConversationState, text: string): FlowResult {
+function continueHandoff(state: ConversationState, text: string, entries: KbEntry[], businessName = business.name): FlowResult {
   const question = state.handoff?.question ?? text;
   const replies: AgentReply[] = [];
 
@@ -630,7 +637,7 @@ function continueHandoff(state: ConversationState, text: string): FlowResult {
     return resetToIdle(state, "Understood — I won't file anything.");
   }
 
-  const [best] = scoreKnowledge(text);
+  const [best] = scoreKnowledgeFromEntries(text, entries);
   if (best?.confident) {
     state.flow = "idle";
     state.handoff = undefined;
@@ -651,7 +658,7 @@ function continueHandoff(state: ConversationState, text: string): FlowResult {
   }
 
   replies.push({
-    text: "I'm still not able to answer that from Cadence's help content. Shall I file it as a ticket so a human picks it up?",
+    text: `I'm still not able to answer that from ${businessName}'s help content. Shall I file it as a ticket so a human picks it up?`,
     chips: [
       { label: "Yes, file a ticket", action: "start_ticket" },
       { label: "No thanks", action: "restart" },
@@ -664,7 +671,7 @@ function continueHandoff(state: ConversationState, text: string): FlowResult {
 /* runFlow — synchronous conversation logic                            */
 /* ------------------------------------------------------------------ */
 
-export function runFlow(input: { state: ConversationState; message: string; action?: WidgetAction }): FlowResult {
+export function runFlow(input: { state: ConversationState; message: string; action?: WidgetAction }, entries: KbEntry[] = knowledgeBase, businessName = business.name): FlowResult {
   const state = normaliseState(input.state);
   const action = input.action ?? "send";
   const text = (input.message ?? "").trim();
@@ -682,7 +689,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
       replies: [
         {
           text: "Sure — ask me anything about Cadence. These come up a lot:",
-          chips: sampleQuestions(5).map((q) => ({ label: q, action: "send" as WidgetAction })),
+          chips: sampleQuestionsFromEntries(entries, 5).map((q) => ({ label: q, action: "send" as WidgetAction })),
         },
       ],
       effects: [],
@@ -721,10 +728,10 @@ export function runFlow(input: { state: ConversationState; message: string; acti
   }
 
   /* --- continue an in-flight flow --- */
-  if (state.flow === "lead") return continueLead(state, text);
-  if (state.flow === "ticket") return continueTicket(state, text);
-  if (state.flow === "troubleshooting") return continueTroubleshooting(state, text, action);
-  if (state.flow === "handoff") return continueHandoff(state, text);
+  if (state.flow === "lead") return continueLead(state, text, entries);
+  if (state.flow === "ticket") return continueTicket(state, text, entries);
+  if (state.flow === "troubleshooting") return continueTroubleshooting(state, text, action, entries);
+  if (state.flow === "handoff") return continueHandoff(state, text, entries, businessName);
 
   /* --- idle: classify --- */
   if (RE_LEAD.test(text)) {
@@ -735,13 +742,13 @@ export function runFlow(input: { state: ConversationState; message: string; acti
   }
   if (RE_TICKET.test(text)) return startTicket(state, { subject: text.slice(0, 120), whatDoing: text });
 
-  const best = retrieve(text);
+  const best = retrieveFromKnowledgeBase(text, entries);
   if (best) {
     if (best.entry.kind === "troubleshooting") return startTroubleshooting(state, best.entry, text);
     return answerFaq(state, best.entry);
   }
 
-  if (RE_CAPABILITY.test(text)) return capabilityReply(state);
+  if (RE_CAPABILITY.test(text)) return capabilityReply(state, businessName);
   if (RE_GREETING.test(text)) {
     state.flow = "idle";
     return {
@@ -749,7 +756,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
       replies: [
         {
           text: `${helpDesk.greeting}`,
-          chips: [...QUICK_CHIPS, ...sampleQuestions(3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
+          chips: [...QUICK_CHIPS, ...sampleQuestionsFromEntries(entries, 3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
         },
       ],
       effects: [],
@@ -764,7 +771,7 @@ export function runFlow(input: { state: ConversationState; message: string; acti
     };
   }
 
-  return unknownHandoff(state, text);
+  return unknownHandoff(state, text, businessName);
 }
 
 /* ------------------------------------------------------------------ */
@@ -788,6 +795,9 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   let state = normaliseState(input.state);
   let storageError: string | undefined;
   let storageOk = false;
+  let knowledgeEntries: KbEntry[] = [];
+  let businessName = business.name;
+
   let planUsage: store.BusinessPlanUsage = {
     plan: {
       id: "free",
@@ -811,6 +821,14 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
     storageOk = true;
   } catch (err) {
     storageError = errText(err);
+  }
+
+  try {
+    const profile = await store.getBusinessProfile(businessId);
+    if (profile) businessName = profile.name;
+    knowledgeEntries = await store.listKnowledgeBase(businessId);
+  } catch (err) {
+    storageError = storageError ?? errText(err);
   }
 
   /* Load authoritative state from the database when we can. */
@@ -872,7 +890,7 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   }
 
   /* --- conversation logic --- */
-  let result = runFlow({ state, message, action });
+  let result = runFlow({ state, message, action }, knowledgeEntries, businessName);
 
   /* Optional LLM assist: only when retrieval was NOT confident, let the model
      pick among the top candidates. Guarded — it can only return a KB entry. */
@@ -882,12 +900,12 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
       // deterministic confidence bar. A weak lexical overlap (for example
       // "quantum encryption" sharing only "encryption" with the security FAQ)
       // must remain a human handoff, never an invitation for the model to guess.
-      const candidates = scoreKnowledge(message)
+      const candidates = scoreKnowledgeFromEntries(message, knowledgeEntries)
         .filter((m) => m.confident)
         .slice(0, 4)
         .map((m) => ({ id: m.entry.id, title: m.entry.title, question: m.entry.question }));
       const picked = await llmLayer.route(message, candidates);
-      const entry = picked ? getKbEntry(picked) : undefined;
+      const entry = picked ? entryById(knowledgeEntries, picked) : undefined;
       if (entry) {
         result =
           entry.kind === "troubleshooting"
@@ -1024,6 +1042,6 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
 export function greeting(): AgentReply {
   return {
     text: helpDesk.greeting,
-    chips: [...QUICK_CHIPS, ...sampleQuestions(3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
+    chips: [...QUICK_CHIPS, ...sampleQuestionsFromEntries(entries, 3).map((q) => ({ label: q, action: "send" as WidgetAction }))],
   };
 }

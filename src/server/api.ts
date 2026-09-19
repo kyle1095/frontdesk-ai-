@@ -110,6 +110,7 @@ export interface OperatorPayload {
   tickets: store.TicketRecord[];
   conversations: store.ConversationSummary[];
   searchResults: store.ConversationSearchResult[];
+  knowledgeBase: store.KnowledgeBaseEntry[];
   transcript?: store.ConversationTranscript | null;
 }
 
@@ -138,6 +139,7 @@ export const operatorData = createServerFn({ method: "POST" })
       tickets: [],
       conversations: [],
       searchResults: [],
+      knowledgeBase: [],
     };
     if (!account) return { ...blank, error: "Sign-in required." };
 
@@ -153,12 +155,13 @@ export const operatorData = createServerFn({ method: "POST" })
     }
 
     try {
-      const [plan, leads, tickets, conversations, searchResults] = await Promise.all([
+      const [plan, leads, tickets, conversations, searchResults, knowledgeBase] = await Promise.all([
         store.getBusinessPlanUsage(account.businessId),
         store.listLeads(account.businessId, 50),
         store.listTickets(account.businessId, 50),
         store.listConversations(account.businessId, 30),
         store.searchConversations(account.businessId, data.search, 30),
+        store.listKnowledgeBase(account.businessId),
       ]);
       const transcript = data.conversationId
         ? await store.getTranscript(data.conversationId, account.businessId)
@@ -172,6 +175,7 @@ export const operatorData = createServerFn({ method: "POST" })
         tickets,
         conversations,
         searchResults,
+        knowledgeBase,
         transcript,
       };
     } catch (err) {
@@ -214,6 +218,66 @@ export const operatorUpdateTicketStatus = createServerFn({ method: "POST" })
     }
     return store.updateTicketStatus(data.ticketId, data.status, account.businessId);
   });
+
+function knowledgeInput(value: unknown): store.KnowledgeBaseInput {
+  const obj = (value ?? {}) as Record<string, unknown>;
+  const categories = ["product", "pricing", "trial", "sales", "integrations", "setup", "policies", "troubleshooting"] as const;
+  const category = categories.includes(obj.category as (typeof categories)[number]) ? (obj.category as (typeof categories)[number]) : "product";
+  return {
+    id: typeof obj.id === "string" ? obj.id : undefined,
+    kind: obj.kind === "troubleshooting" ? "troubleshooting" : "faq",
+    category,
+    title: typeof obj.title === "string" ? obj.title.slice(0, 200) : "",
+    question: typeof obj.question === "string" ? obj.question.slice(0, 500) : "",
+    answer: typeof obj.answer === "string" ? obj.answer.slice(0, 5000) : "",
+    keywords: Array.isArray(obj.keywords) ? obj.keywords.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 80)).slice(0, 50) : [],
+    steps: Array.isArray(obj.steps) ? obj.steps.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 500)).slice(0, 20) : [],
+    escalate: typeof obj.escalate === "string" ? obj.escalate.slice(0, 1000) : undefined,
+  };
+}
+
+export const operatorCreateKnowledgeBase = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => knowledgeInput(data))
+  .handler(async ({ data }): Promise<OperatorMutationResponse & { entry?: store.KnowledgeBaseEntry }> => {
+    const account = await auth.currentAccount();
+    if (!account) return { ok: false, error: "Sign-in required." };
+    return store.createKnowledgeBaseEntry(account.businessId, data);
+  });
+
+export const operatorUpdateKnowledgeBase = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => knowledgeInput(data))
+  .handler(async ({ data }): Promise<OperatorMutationResponse & { entry?: store.KnowledgeBaseEntry }> => {
+    const account = await auth.currentAccount();
+    if (!account) return { ok: false, error: "Sign-in required." };
+    if (!data.id) return { ok: false, error: "Entry id is required." };
+    return store.updateKnowledgeBaseEntry(account.businessId, data.id, data);
+  });
+
+export const operatorDeleteKnowledgeBase = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const obj = (data ?? {}) as Record<string, unknown>;
+    return { id: typeof obj.id === "string" ? obj.id : "" };
+  })
+  .handler(async ({ data }): Promise<OperatorMutationResponse> => {
+    const account = await auth.currentAccount();
+    if (!account) return { ok: false, error: "Sign-in required." };
+    if (!data.id) return { ok: false, error: "Entry id is required." };
+    return store.deleteKnowledgeBaseEntry(account.businessId, data.id);
+  });
+
+export const widgetBusiness = createServerFn({ method: "GET" })
+  .inputValidator((data: unknown) => {
+    const obj = (data ?? {}) as Record<string, unknown>;
+    return { businessId: typeof obj.businessId === "string" ? obj.businessId : "cadence" };
+  })
+  .handler(async ({ data }) => {
+    return (await store.getBusinessProfile(data.businessId)) ?? { id: "cadence", name: "Cadence", slug: "cadence" };
+  });
+
+export const installData = createServerFn({ method: "GET" }).handler(async () => ({
+  origin: "https://f84c49587847aae2d38ee792763f89f2.ctonew.app",
+  account: await auth.currentAccount().catch(() => null),
+}));
 
 /** The install snippet always targets the published widget host, not a preview proxy host. */
 export const siteOrigin = createServerFn({ method: "GET" }).handler(

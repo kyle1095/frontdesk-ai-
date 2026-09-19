@@ -17,7 +17,8 @@
  */
 
 import { sql as neonSql } from "~/db";
-import { getPlan, type PlanConfig, type PlanId } from "~/config/plans";
+import { getPlan, type PlanConfig } from "~/config/plans";
+import { knowledgeBase, type KbEntry, type KbCategory } from "~/content/business";
 
 export type Row = Record<string, unknown>;
 
@@ -26,6 +27,23 @@ export interface StorageStatus {
   reachable: boolean;
   driver: "neon-http" | "tcp" | "none";
   error?: string;
+}
+
+export interface KnowledgeBaseEntry extends KbEntry {
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KnowledgeBaseInput {
+  id?: string;
+  kind: KbEntry["kind"];
+  category: KbCategory;
+  title: string;
+  question: string;
+  answer: string;
+  keywords: string[];
+  steps?: string[];
+  escalate?: string;
 }
 
 export interface BusinessPlanUsage {
@@ -244,14 +262,51 @@ const SCHEMA = [
   `CREATE SEQUENCE IF NOT EXISTS ticket_reference_seq START WITH 1042`,
   `CREATE INDEX IF NOT EXISTS messages_conversation_idx ON messages (conversation_id, id)`,
   `CREATE INDEX IF NOT EXISTS conversations_business_created_idx ON conversations (business_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS kb_entries (
+     id text PRIMARY KEY,
+     business_id text NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+     kind text NOT NULL CHECK (kind IN ('faq', 'troubleshooting')),
+     category text NOT NULL DEFAULT 'product',
+     title text NOT NULL,
+     question text NOT NULL,
+     answer text NOT NULL,
+     keywords jsonb NOT NULL DEFAULT '[]'::jsonb,
+     steps jsonb NOT NULL DEFAULT '[]'::jsonb,
+     escalate text,
+     created_at timestamptz NOT NULL DEFAULT now(),
+     updated_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS kb_entries_business_idx ON kb_entries (business_id, created_at, id)`,
 ];
 
 let schemaReady: Promise<void> | null = null;
+
+async function seedCadenceKnowledgeBase(): Promise<void> {
+  for (const entry of knowledgeBase) {
+    await query(
+      `INSERT INTO kb_entries (id, business_id, kind, category, title, question, answer, keywords, steps, escalate)
+       VALUES ($1, 'cadence', $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        entry.id,
+        entry.kind,
+        entry.category,
+        entry.title,
+        entry.question,
+        entry.answer,
+        JSON.stringify(entry.keywords),
+        JSON.stringify(entry.steps ?? []),
+        entry.escalate ?? null,
+      ],
+    );
+  }
+}
 
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {
     schemaReady = (async () => {
       for (const statement of SCHEMA) await query(statement);
+      await seedCadenceKnowledgeBase();
     })().catch((err) => {
       schemaReady = null; // let the next request retry
       throw err;
@@ -293,6 +348,15 @@ function toText(value: unknown): string {
   return value == null ? "" : String(value);
 }
 
+export async function getBusinessProfile(value: string): Promise<{ id: string; name: string; slug: string } | null> {
+  await ensureSchema();
+  const key = value.trim().toLowerCase();
+  if (!key) return null;
+  const rows = await query(`SELECT id, name, slug FROM businesses WHERE id = $1 OR slug = $1 LIMIT 1`, [key]);
+  const row = rows[0];
+  return row ? { id: toText(row.id), name: toText(row.name), slug: toText(row.slug) } : null;
+}
+
 export async function resolveBusinessId(value: string): Promise<string | null> {
   await ensureSchema();
   const key = value.trim().toLowerCase();
@@ -302,6 +366,109 @@ export async function resolveBusinessId(value: string): Promise<string | null> {
     [key],
   );
   return rows[0]?.id == null ? null : toText(rows[0].id);
+}
+
+function jsonArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
+  if (typeof value === "string") {
+    try {
+      return jsonArray(JSON.parse(value));
+    } catch {
+      return value.split(",").map((item) => item.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function mapKnowledgeBaseRow(row: Row): KnowledgeBaseEntry {
+  const kind = row.kind === "troubleshooting" ? "troubleshooting" : "faq";
+  const categories: KbCategory[] = ["product", "pricing", "trial", "sales", "integrations", "setup", "policies", "troubleshooting"];
+  const category = categories.includes(row.category as KbCategory) ? (row.category as KbCategory) : "product";
+  return {
+    id: toText(row.id),
+    kind,
+    category,
+    title: toText(row.title),
+    question: toText(row.question),
+    answer: toText(row.answer),
+    keywords: jsonArray(row.keywords),
+    steps: jsonArray(row.steps),
+    escalate: row.escalate == null ? undefined : toText(row.escalate),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+  };
+}
+
+export async function listKnowledgeBase(businessId: string): Promise<KnowledgeBaseEntry[]> {
+  await ensureSchema();
+  const rows = await query(
+    `SELECT id, kind, category, title, question, answer, keywords, steps, escalate, created_at, updated_at
+     FROM kb_entries WHERE business_id = $1 ORDER BY created_at ASC, id ASC`,
+    [businessId],
+  );
+  return rows.map(mapKnowledgeBaseRow);
+}
+
+function validKnowledgeInput(input: KnowledgeBaseInput): string | null {
+  if (!input.title.trim() || !input.question.trim() || !input.answer.trim()) return "Title, question and answer are required.";
+  if (!input.keywords.length) return "Add at least one keyword.";
+  return null;
+}
+
+export async function createKnowledgeBaseEntry(
+  businessId: string,
+  input: KnowledgeBaseInput,
+): Promise<{ ok: boolean; entry?: KnowledgeBaseEntry; error?: string }> {
+  const validation = validKnowledgeInput(input);
+  if (validation) return { ok: false, error: validation };
+  try {
+    await ensureSchema();
+    const id = input.id?.trim() || `kb-${crypto.randomUUID()}`;
+    const rows = await query(
+      `INSERT INTO kb_entries (id, business_id, kind, category, title, question, answer, keywords, steps, escalate)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10)
+       RETURNING id, kind, category, title, question, answer, keywords, steps, escalate, created_at, updated_at`,
+      [id, businessId, input.kind, input.category, input.title.trim(), input.question.trim(), input.answer.trim(), JSON.stringify(input.keywords), JSON.stringify(input.steps ?? []), input.escalate?.trim() || null],
+    );
+    return { ok: true, entry: mapKnowledgeBaseRow(rows[0]!) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function updateKnowledgeBaseEntry(
+  businessId: string,
+  id: string,
+  input: KnowledgeBaseInput,
+): Promise<{ ok: boolean; entry?: KnowledgeBaseEntry; error?: string }> {
+  const validation = validKnowledgeInput(input);
+  if (validation) return { ok: false, error: validation };
+  try {
+    await ensureSchema();
+    const rows = await query(
+      `UPDATE kb_entries SET kind = $3, category = $4, title = $5, question = $6, answer = $7,
+       keywords = $8::jsonb, steps = $9::jsonb, escalate = $10, updated_at = now()
+       WHERE id = $1 AND business_id = $2
+       RETURNING id, kind, category, title, question, answer, keywords, steps, escalate, created_at, updated_at`,
+      [id, businessId, input.kind, input.category, input.title.trim(), input.question.trim(), input.answer.trim(), JSON.stringify(input.keywords), JSON.stringify(input.steps ?? []), input.escalate?.trim() || null],
+    );
+    return rows[0] ? { ok: true, entry: mapKnowledgeBaseRow(rows[0]) } : { ok: false, error: "Knowledge-base entry not found." };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function deleteKnowledgeBaseEntry(
+  businessId: string,
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await ensureSchema();
+    const rows = await query(`DELETE FROM kb_entries WHERE id = $1 AND business_id = $2 RETURNING id`, [id, businessId]);
+    return rows.length ? { ok: true } : { ok: false, error: "Knowledge-base entry not found." };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 export async function getBusinessPlanUsage(
