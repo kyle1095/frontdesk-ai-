@@ -342,7 +342,7 @@ function unknownHandoff(state: ConversationState, question: string, businessName
   return {
     state,
     replies: [
-      { text: helpDesk.unknownFallback },
+      { text: helpDesk.unknownFallback.replace("Cadence", businessName) },
       {
         text: "Shall I file that for you?",
         chips: [
