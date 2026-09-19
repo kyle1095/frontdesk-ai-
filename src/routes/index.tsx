@@ -11,6 +11,7 @@ import {
   HelpDeskWidget,
   type HelpDeskWidgetConfig,
 } from "~/components/HelpDeskWidget";
+import type { WidgetAction } from "~/server/engine";
 import { business, helpDesk, knowledgeBase } from "~/content/business";
 
 export const Route = createFileRoute("/")({
@@ -25,7 +26,10 @@ const widgetConfig: HelpDeskWidgetConfig = {
   greeting: helpDesk.greeting,
   accent: "#0f766e",
   quickActions: [...helpDesk.quickActions],
-  suggestions: [...helpDesk.suggestions],
+  suggestions: [
+    ...helpDesk.suggestions,
+    "Is Cadence suitable for veterinary clinics?",
+  ],
   position: "right",
 };
 
@@ -35,6 +39,13 @@ const faqSuggestions = [
   "Which calendars do you sync with?",
   "How do I set up Cadence?",
   "Is Cadence HIPAA compliant?",
+  "Is Cadence suitable for veterinary clinics?",
+];
+
+const trapQuestions = [
+  "Do you offer reptile boarding?",
+  "Can you diagnose my dog?",
+  "Do you have a discount for new clients?",
 ];
 
 const troubleSuggestions = [
@@ -46,8 +57,12 @@ const troubleSuggestions = [
   "Reminders aren't being sent to patients",
 ];
 
-function openWidget() {
-  window.dispatchEvent(new CustomEvent("frontdesk:open"));
+function openWidget(action?: WidgetAction, message?: string) {
+  window.dispatchEvent(
+    new CustomEvent("frontdesk:open", {
+      detail: { action, message },
+    }),
+  );
 }
 
 function Home() {
@@ -132,12 +147,13 @@ function Home() {
               >
                 {business.hero.primaryCta}
               </button>
-              <a
-                href="#product"
+              <button
+                type="button"
+                onClick={() => openWidget("start_lead")}
                 className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
               >
                 {business.hero.secondaryCta}
-              </a>
+              </button>
             </div>
             <dl className="mt-10 grid grid-cols-3 gap-4 border-t border-slate-200 pt-6">
               {business.stats.map((stat) => (
@@ -208,6 +224,38 @@ function Home() {
           </div>
         </section>
 
+        <section className="border-y border-slate-200 bg-white py-12">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="rounded-2xl border border-teal-200 bg-teal-50 p-6 sm:flex sm:items-center sm:justify-between sm:gap-8">
+              <div className="max-w-2xl">
+                <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                  Try to break it
+                </p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                  Ask something outside the help content
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  These questions are not in Cadence&apos;s seeded help content.
+                  Watch the assistant say so plainly instead of inventing an
+                  answer, then offer a ticket for a human to pick up.
+                </p>
+              </div>
+              <div className="mt-5 flex flex-wrap gap-2 sm:mt-0 sm:max-w-md sm:justify-end">
+                {trapQuestions.map((question) => (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => openWidget("send", question)}
+                    className="rounded-full border border-teal-300 bg-white px-3 py-2 text-left text-sm font-medium text-teal-900 transition hover:border-teal-500 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="support" className="mx-auto max-w-6xl px-4 py-16">
           <div className="grid gap-10 lg:grid-cols-2">
             <div>
@@ -237,34 +285,105 @@ function Home() {
                 ))}
               </ul>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Common problems it can fix
-              </h3>
-              <ul className="mt-4 grid gap-2 text-sm text-slate-700">
-                {troubleSuggestions.map((topic) => (
-                  <li key={topic} className="flex items-start gap-2">
-                    <span
-                      aria-hidden
-                      className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={openWidget}
-                      className="text-left hover:text-teal-800"
-                    >
-                      {topic}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
-                If the help desk does not know an answer, it says so and offers
-                to pass the question to a human — it is not allowed to invent
-                pricing, policy or a fix.
-              </p>
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Operator handoff preview
+                    </p>
+                    <h3 className="mt-1 text-lg font-semibold text-slate-900">
+                      What a human sees next
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    Illustrative
+                  </span>
+                </div>
+                <div className="mt-5 space-y-3">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex items-center justify-between gap-3 text-xs font-semibold text-amber-900">
+                      <span>Ticket filed</span>
+                      <span>Example</span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      Ref TK-1042 · Calendar sync question
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      The transcript and customer&apos;s original question stay
+                      attached.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+                    <div className="flex items-center justify-between gap-3 text-xs font-semibold text-teal-900">
+                      <span>Call slot offered</span>
+                      <span>Example</span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      Tue 10:00 ET · 30 minutes
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      A human confirms the selected demo time after the request
+                      is saved.
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs leading-5 text-slate-500">
+                  Example only — this preview is not a live ticket or calendar
+                  slot. The widget creates real handoffs when its storage is
+                  connected.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                  Common problems it can fix
+                </h3>
+                <ul className="mt-4 grid gap-2 text-sm text-slate-700">
+                  {troubleSuggestions.map((topic) => (
+                    <li key={topic} className="flex items-start gap-2">
+                      <span
+                        aria-hidden
+                        className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={openWidget}
+                        className="text-left hover:text-teal-800"
+                      >
+                        {topic}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
+                  If the help desk does not know an answer, it says so and
+                  offers to pass the question to a human — it is not allowed to
+                  invent pricing, policy or a fix.
+                </p>
+              </div>
             </div>
           </div>
+
+          <p className="mt-8 text-sm leading-6 text-slate-600">
+            This whole support experience is Frontdesk AI — it answers from
+            these {knowledgeBase.length} articles, books call slots, and files
+            tickets with reference numbers. Add it to your site with one line,
+            free for 50 conversations/month →{" "}
+            <a
+              className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950"
+              href="/install"
+            >
+              Install
+            </a>{" "}
+            ·{" "}
+            <a
+              className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950"
+              href="/pricing"
+            >
+              Pricing
+            </a>
+          </p>
         </section>
 
         <section
