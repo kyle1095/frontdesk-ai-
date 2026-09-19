@@ -32,10 +32,12 @@ export const authSignup = createServerFn({ method: "POST" })
       password: typeof obj.password === "string" ? obj.password : "",
       businessName:
         typeof obj.businessName === "string" ? obj.businessName : "",
+      signupSource:
+        typeof obj.signupSource === "string" ? obj.signupSource.slice(0, 120) : null,
     };
   })
   .handler(async ({ data }): Promise<AuthResponse> =>
-    auth.signup(data.email, data.password, data.businessName),
+    auth.signup(data.email, data.password, data.businessName, data.signupSource),
   );
 
 export const authLogin = createServerFn({ method: "POST" })
