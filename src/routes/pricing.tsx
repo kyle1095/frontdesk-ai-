@@ -57,6 +57,8 @@ function PricingPage() {
                 <p className="mt-6"><span className="text-4xl font-bold">${plan.monthlyPrice}</span><span className="text-sm text-slate-500"> / month</span></p>
                 {plan.paymentLinkUrl ? (
                   <a href={plan.paymentLinkUrl} className="mt-6 rounded-lg bg-teal-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-teal-800">Choose {plan.name}</a>
+                ) : plan.id === "free" ? (
+                  <a href="/signup" className="mt-6 rounded-lg bg-teal-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-teal-800">Start free</a>
                 ) : (
                   <button type="button" disabled className="mt-6 cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-500">Coming shortly</button>
                 )}
