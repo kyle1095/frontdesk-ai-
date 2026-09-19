@@ -12,10 +12,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   operatorData,
   operatorUpdateTicketStatus,
+  operatorCreateKnowledgeBase,
+  operatorUpdateKnowledgeBase,
+  operatorDeleteKnowledgeBase,
+  siteOrigin,
   authLogout,
   type OperatorPayload,
 } from "~/server/api";
-import type { TicketStatus } from "~/server/store";
+import type { TicketStatus, KnowledgeBaseEntry, KnowledgeBaseInput } from "~/server/store";
 
 export const Route = createFileRoute("/operator")({
   component: OperatorPage,
@@ -39,6 +43,12 @@ function OperatorPage() {
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [updatingTicketId, setUpdatingTicketId] = useState<number | null>(null);
+  const [kbBusy, setKbBusy] = useState(false);
+  const [kbNotice, setKbNotice] = useState<string | null>(null);
+  const [installOrigin, setInstallOrigin] = useState("");
+  const [draft, setDraft] = useState<KnowledgeBaseInput>({
+    kind: "faq", category: "product", title: "", question: "", answer: "", keywords: [], steps: [],
+  });
 
   const load = useCallback(
     async (conversationId?: string, searchOverride?: string) => {
@@ -73,6 +83,7 @@ function OperatorPage() {
 
   useEffect(() => {
     void load();
+    void siteOrigin().then(setInstallOrigin).catch(() => {});
   }, [load]);
 
   const signOut = async () => {
@@ -121,6 +132,42 @@ function OperatorPage() {
       await load(transcriptId ?? undefined, searchQuery);
     }
     setUpdatingTicketId(null);
+  };
+
+  const saveNewEntry = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setKbBusy(true);
+    setKbNotice(null);
+    const result = await operatorCreateKnowledgeBase({ data: draft });
+    if (result.ok) {
+      setDraft({ kind: "faq", category: "product", title: "", question: "", answer: "", keywords: [], steps: [] });
+      setKbNotice("Question added. Your widget will use it immediately.");
+      await load(undefined, searchQuery);
+    } else setKbNotice(result.error ?? "Could not add that question.");
+    setKbBusy(false);
+  };
+
+  const saveEntry = async (entry: KnowledgeBaseEntry) => {
+    setKbBusy(true);
+    setKbNotice(null);
+    const result = await operatorUpdateKnowledgeBase({ data: entry });
+    if (result.ok) {
+      setKbNotice("Saved.");
+      await load(transcriptId ?? undefined, searchQuery);
+    } else setKbNotice(result.error ?? "Could not save that entry.");
+    setKbBusy(false);
+  };
+
+  const deleteEntry = async (id: string) => {
+    if (!window.confirm("Delete this help entry? The widget will stop answering from it.")) return;
+    setKbBusy(true);
+    setKbNotice(null);
+    const result = await operatorDeleteKnowledgeBase({ data: { id } });
+    if (result.ok) {
+      setKbNotice("Entry deleted.");
+      await load(transcriptId ?? undefined, searchQuery);
+    } else setKbNotice(result.error ?? "Could not delete that entry.");
+    setKbBusy(false);
   };
 
   const account = data?.account;
@@ -185,6 +232,57 @@ function OperatorPage() {
             </button>
           </div>
         )}
+
+        <section aria-labelledby="kb-heading" className="rounded-2xl border border-teal-200 bg-white shadow-sm">
+          <div className="border-b border-teal-100 bg-teal-50 px-5 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Your help content</p>
+                <h2 id="kb-heading" className="mt-1 text-xl font-bold text-slate-900">Knowledge base <span className="text-sm font-normal text-slate-500">({data?.knowledgeBase.length ?? 0} entries)</span></h2>
+                <p className="mt-1 text-sm text-slate-700">The widget answers only from these questions and answers. Add a few before installing it.</p>
+              </div>
+              {account?.businessSlug && <a href="/install" className="rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800">Install widget</a>}
+            </div>
+          </div>
+          {data?.knowledgeBase.length === 0 && (
+            <div className="m-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+              <h3 className="font-semibold">Add your first questions</h3>
+              <p className="mt-1">Your new help desk is ready, but it has no answers yet. Add a question below, then install the widget using this snippet:</p>
+              {account?.businessSlug && installOrigin && <code className="mt-3 block overflow-x-auto rounded-lg bg-white px-3 py-2 text-xs">{`<script src="${installOrigin}/widget.js" data-business="${account.businessSlug}"></script>`}</code>}
+            </div>
+          )}
+          <form onSubmit={saveNewEntry} className="grid gap-3 border-b border-slate-100 px-5 py-5">
+            <h3 className="font-semibold">Add a question</h3>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Title<input required value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Shipping policy" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Question<input required value={draft.question} onChange={(e) => setDraft({ ...draft, question: e.target.value })} placeholder="How long does shipping take?" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
+            </div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Answer<textarea required rows={3} value={draft.answer} onChange={(e) => setDraft({ ...draft, answer: e.target.value })} placeholder="Grounded answer customers can rely on" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Keywords <span className="font-normal normal-case">(comma separated)</span><input value={draft.keywords.join(", ")} onChange={(e) => setDraft({ ...draft, keywords: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} placeholder="shipping, delivery, arrival" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Type<select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as KnowledgeBaseInput["kind"] })} className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"><option value="faq">FAQ</option><option value="troubleshooting">Troubleshooting</option></select></label>
+              <button disabled={kbBusy} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">{kbBusy ? "Saving…" : "Add question"}</button>
+            </div>
+            {kbNotice && <p role="status" className="text-sm text-teal-700">{kbNotice}</p>}
+          </form>
+          <div className="divide-y divide-slate-100">
+            {(data?.knowledgeBase ?? []).map((entry) => (
+              <article key={entry.id} className="space-y-3 px-5 py-5">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Title<input value={entry.title} onChange={(e) => setData((current) => current ? { ...current, knowledgeBase: current.knowledgeBase.map((x) => x.id === entry.id ? { ...x, title: e.target.value } : x) } : current)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Question<input value={entry.question} onChange={(e) => setData((current) => current ? { ...current, knowledgeBase: current.knowledgeBase.map((x) => x.id === entry.id ? { ...x, question: e.target.value } : x) } : current)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
+                </div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Answer<textarea rows={3} value={entry.answer} onChange={(e) => setData((current) => current ? { ...current, knowledgeBase: current.knowledgeBase.map((x) => x.id === entry.id ? { ...x, answer: e.target.value } : x) } : current)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="min-w-[240px] flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Keywords<input value={entry.keywords.join(", ")} onChange={(e) => setData((current) => current ? { ...current, knowledgeBase: current.knowledgeBase.map((x) => x.id === entry.id ? { ...x, keywords: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) } : x) } : current)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
+                  <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-600">{entry.kind}</span>
+                  <button type="button" disabled={kbBusy} onClick={() => void saveEntry(entry)} className="rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Save</button>
+                  <button type="button" disabled={kbBusy} onClick={() => void deleteEntry(entry.id)} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">Delete</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
 
         {data?.plan && (
           <section className="rounded-2xl border border-teal-200 bg-teal-50 p-5" aria-labelledby="plan-heading">
