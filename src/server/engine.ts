@@ -22,7 +22,6 @@
 
 import {
   business,
-  getKbEntry,
   helpDesk,
   upcomingSalesSlots,
   type KbEntry,
@@ -601,7 +600,7 @@ function continueTroubleshooting(state: ConversationState, text: string, action:
   }
 
   // Something else asked mid-flow: answer it if we can, then check back in.
-  const [best] = scoreKnowledge(sub);
+  const [best] = scoreKnowledgeFromEntries(sub, entries);
   if (best?.confident) {
     return {
       state,
