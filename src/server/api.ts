@@ -265,6 +265,15 @@ export const operatorDeleteKnowledgeBase = createServerFn({ method: "POST" })
     return store.deleteKnowledgeBaseEntry(account.businessId, data.id);
   });
 
+export const widgetBusiness = createServerFn({ method: "GET" })
+  .inputValidator((data: unknown) => {
+    const obj = (data ?? {}) as Record<string, unknown>;
+    return { businessId: typeof obj.businessId === "string" ? obj.businessId : "cadence" };
+  })
+  .handler(async ({ data }) => {
+    return (await store.getBusinessProfile(data.businessId)) ?? { id: "cadence", name: "Cadence", slug: "cadence" };
+  });
+
 export const installData = createServerFn({ method: "GET" }).handler(async () => ({
   origin: "https://f84c49587847aae2d38ee792763f89f2.ctonew.app",
   account: await auth.currentAccount().catch(() => null),

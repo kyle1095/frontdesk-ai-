@@ -348,6 +348,15 @@ function toText(value: unknown): string {
   return value == null ? "" : String(value);
 }
 
+export async function getBusinessProfile(value: string): Promise<{ id: string; name: string; slug: string } | null> {
+  await ensureSchema();
+  const key = value.trim().toLowerCase();
+  if (!key) return null;
+  const rows = await query(`SELECT id, name, slug FROM businesses WHERE id = $1 OR slug = $1 LIMIT 1`, [key]);
+  const row = rows[0];
+  return row ? { id: toText(row.id), name: toText(row.name), slug: toText(row.slug) } : null;
+}
+
 export async function resolveBusinessId(value: string): Promise<string | null> {
   await ensureSchema();
   const key = value.trim().toLowerCase();
