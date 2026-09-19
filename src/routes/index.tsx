@@ -11,6 +11,7 @@ import {
   HelpDeskWidget,
   type HelpDeskWidgetConfig,
 } from "~/components/HelpDeskWidget";
+import type { WidgetAction } from "~/server/engine";
 import { business, helpDesk, knowledgeBase } from "~/content/business";
 
 export const Route = createFileRoute("/")({
@@ -46,8 +47,12 @@ const troubleSuggestions = [
   "Reminders aren't being sent to patients",
 ];
 
-function openWidget() {
-  window.dispatchEvent(new CustomEvent("frontdesk:open"));
+function openWidget(action?: WidgetAction, message?: string) {
+  window.dispatchEvent(
+    new CustomEvent("frontdesk:open", {
+      detail: { action, message },
+    }),
+  );
 }
 
 function Home() {
@@ -132,12 +137,13 @@ function Home() {
               >
                 {business.hero.primaryCta}
               </button>
-              <a
-                href="#product"
+              <button
+                type="button"
+                onClick={() => openWidget("start_lead")}
                 className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
               >
                 {business.hero.secondaryCta}
-              </a>
+              </button>
             </div>
             <dl className="mt-10 grid grid-cols-3 gap-4 border-t border-slate-200 pt-6">
               {business.stats.map((stat) => (

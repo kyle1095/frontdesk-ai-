@@ -75,6 +75,7 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [showBranding, setShowBranding] = useState(config.showBranding ?? true);
   const [error, setError] = useState<string | null>(null);
+  const skipGreetingRef = useRef(false);
 
   const stateRef = useRef<ConversationState | null>(null);
   const conversationRef = useRef<string | null>(null);
@@ -207,6 +208,10 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
   // Open with a greeting; close on Escape.
   useEffect(() => {
     if (open && bubbles.length === 0) {
+      if (skipGreetingRef.current) {
+        skipGreetingRef.current = false;
+        return undefined;
+      }
       const timer = window.setTimeout(() => {
         void pushAgent(
           {
@@ -244,10 +249,25 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
-  // Let the host page open the widget from its own buttons:
-  //   window.dispatchEvent(new CustomEvent("frontdesk:open"))
+  // Let the host page open the widget from its own buttons. A host can also
+  // pass an action or message to jump straight into a flow:
+  //   new CustomEvent("frontdesk:open", { detail: { action: "start_lead" } })
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        action?: WidgetAction;
+        message?: string;
+      }>).detail;
+      const action = detail?.action;
+      const message = detail?.message;
+      if (action || message) skipGreetingRef.current = true;
+      setOpen(true);
+      if (action || message) {
+        window.setTimeout(() => {
+          sendRef.current(message ?? "", action ?? "send");
+        }, 0);
+      }
+    };
     window.addEventListener("frontdesk:open", onOpen);
     return () => window.removeEventListener("frontdesk:open", onOpen);
   }, []);
