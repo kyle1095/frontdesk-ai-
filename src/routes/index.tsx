@@ -271,6 +271,16 @@ function Home() {
               </p>
             </div>
           </div>
+
+          <p className="mt-8 text-sm leading-6 text-slate-600">
+            This whole support experience is Frontdesk AI — it answers from these {knowledgeBase.length} articles, books call slots, and files tickets with reference numbers. Add it to your site with one line, free for 50 conversations/month →{" "}
+            <a className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950" href="/install">
+              Install
+            </a>{" "}·{" "}
+            <a className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950" href="/pricing">
+              Pricing
+            </a>
+          </p>
         </section>
 
         <section
