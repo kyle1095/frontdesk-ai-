@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { captureAttributionSource } from "~/client/attribution";
 import { chatTurn } from "~/server/api";
 import type { KbEntry } from "~/content/business";
 import { retrieveFromKnowledgeBase } from "~/server/retrieval";
@@ -80,6 +81,7 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
     action?: WidgetAction;
     message?: string;
   } | null>(null);
+  const attributionRef = useRef<string | null>(null);
 
   const stateRef = useRef<ConversationState | null>(null);
   const conversationRef = useRef<string | null>(null);
@@ -112,16 +114,24 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
     });
   }, []);
 
-  const sendRef = useRef<(text: string, action?: WidgetAction) => void>(
-    () => {},
-  );
+  const sendRef = useRef<(
+    text: string,
+    action?: WidgetAction,
+    entryPoint?: string | null,
+  ) => void>(() => {});
   const send = useCallback(
-    async (text: string, action: WidgetAction = "send") => {
+    async (
+      text: string,
+      action: WidgetAction = "send",
+      entryPoint?: string | null,
+    ) => {
       if (busy) return;
       const trimmed = text.trim();
       if (!trimmed && action === "send") return;
       setError(null);
       setBusy(true);
+      const source = attributionRef.current ?? captureAttributionSource();
+      const firstEntryPoint = conversationRef.current ? null : entryPoint?.trim() || null;
       if (trimmed) {
         setBubbles((prev) => [
           ...prev,
@@ -168,9 +178,15 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
             message: trimmed,
             action,
             state: stateRef.current,
+            source,
+            entryPoint: firstEntryPoint,
           };
           const res = config.apiUrl
-            ? await fetch(config.apiUrl, {
+            ? await fetch((() => {
+                const url = new URL(config.apiUrl!, window.location.href);
+                if (source) url.searchParams.set("ref", source);
+                return url.toString();
+              })(), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -205,9 +221,14 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
         inputRef.current?.focus();
       }
     },
-    [busy, config.businessId, pushAgent],
+    [busy, config.apiUrl, config.businessId, pushAgent],
   );
-  sendRef.current = (text, action) => void send(text, action ?? "send");
+  sendRef.current = (text, action, entryPoint) =>
+    void send(text, action ?? "send", entryPoint);
+
+  useEffect(() => {
+    attributionRef.current = captureAttributionSource();
+  }, []);
 
   // Open with a greeting; close on Escape.
   useEffect(() => {
@@ -423,7 +444,11 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
                           type="button"
                           disabled={busy}
                           onClick={() =>
-                            sendRef.current(chip.label, chip.action ?? "send")
+                            sendRef.current(
+                              chip.label,
+                              chip.action ?? "send",
+                              chip.label,
+                            )
                           }
                           className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:opacity-50"
                         >

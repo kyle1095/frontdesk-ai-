@@ -7,12 +7,14 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 import {
   HelpDeskWidget,
   type HelpDeskWidgetConfig,
 } from "~/components/HelpDeskWidget";
 import type { WidgetAction } from "~/server/engine";
 import { business, helpDesk, knowledgeBase } from "~/content/business";
+import { captureAttributionSource } from "~/client/attribution";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -66,6 +68,10 @@ function openWidget(action?: WidgetAction, message?: string) {
 }
 
 function Home() {
+  useEffect(() => {
+    captureAttributionSource();
+  }, []);
+
   return (
     <div className="min-h-dvh bg-white text-slate-900">
       {/* Demo notice — this is our sample business page, not Frontdesk AI's own site */}

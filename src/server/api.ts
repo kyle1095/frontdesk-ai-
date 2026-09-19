@@ -76,6 +76,8 @@ export interface ChatRequest {
   message?: string;
   action?: TurnInput["action"];
   state?: unknown;
+  source?: string | null;
+  entryPoint?: string | null;
 }
 
 export const chatTurn = createServerFn({ method: "POST" })
@@ -90,6 +92,8 @@ export const chatTurn = createServerFn({ method: "POST" })
         typeof obj.message === "string" ? obj.message.slice(0, 2000) : "",
       action: typeof obj.action === "string" ? obj.action : "send",
       state: obj.state ?? initialState(),
+      source: typeof obj.source === "string" ? obj.source.slice(0, 120) : null,
+      entryPoint: typeof obj.entryPoint === "string" ? obj.entryPoint.slice(0, 200) : null,
     } satisfies ChatRequest;
   })
   .handler(async ({ data }): Promise<TurnResult> => {

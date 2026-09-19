@@ -41,6 +41,11 @@ export const Route = createFileRoute("/api/chat")({
                 ? (raw.action as TurnInput["action"])
                 : "send",
             state: raw.state ?? initialState(),
+            source:
+              new URL(request.url).searchParams.get("ref")?.trim().slice(0, 120) ||
+              (typeof raw.source === "string" ? raw.source.slice(0, 120) : null),
+            entryPoint:
+              typeof raw.entryPoint === "string" ? raw.entryPoint.slice(0, 200) : null,
           };
           return withCors(Response.json(await handleTurn(input)));
         } catch (error) {

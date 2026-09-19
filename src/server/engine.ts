@@ -108,6 +108,8 @@ export interface TurnInput {
   message?: string;
   action?: WidgetAction;
   state?: unknown;
+  source?: string | null;
+  entryPoint?: string | null;
 }
 
 type Effect =
@@ -790,6 +792,8 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   const businessId = resolvedBusinessId ?? business.id;
   const message = (input.message ?? "").trim();
   const action = input.action ?? "send";
+  const source = input.source?.trim().slice(0, 120) || null;
+  const entryPoint = input.entryPoint?.trim().slice(0, 200) || null;
 
   let conversationId = input.conversationId ?? null;
   let state = normaliseState(input.state);
@@ -870,7 +874,7 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
 
   if (!conversationId) {
     try {
-      conversationId = await store.createConversation(businessId, state);
+      conversationId = await store.createConversation(businessId, state, source, entryPoint);
       planUsage = { ...planUsage, used: planUsage.used + 1 };
       storageOk = true;
     } catch (err) {
