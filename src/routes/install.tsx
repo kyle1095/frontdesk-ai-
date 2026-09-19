@@ -1,16 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { siteOrigin } from "~/server/api";
+import * as auth from "~/server/auth";
 
 export const Route = createFileRoute("/install")({
-  loader: async () => ({ origin: await siteOrigin() }),
+  loader: async () => {
+    const origin = await siteOrigin();
+    const account = await auth.currentAccount().catch(() => null);
+    return { origin, account };
+  },
   component: InstallPage,
 });
 
 function InstallPage() {
-  const { origin } = Route.useLoaderData();
+  const { origin, account } = Route.useLoaderData();
   const [copied, setCopied] = useState(false);
-  const snippet = `<script src="${origin}/widget.js" data-business="cadence" data-accent-color="#0f766e"></script>`;
+  const slug = account?.businessSlug ?? "cadence";
+  const businessName = account?.businessName ?? "Cadence";
+  const snippet = `<script src="${origin}/widget.js" data-business="${slug}" data-accent-color="#0f766e"></script>`;
 
   const copySnippet = async () => {
     try {
@@ -31,7 +38,7 @@ function InstallPage() {
               Frontdesk AI
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight">
-              Install the Cadence demo widget
+              Install the {businessName} widget
             </h1>
           </div>
           <a
@@ -52,10 +59,7 @@ function InstallPage() {
             Add the chat to another website
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-teal-950">
-            This is a demo-grade Cadence help desk. It answers from the seeded
-            Cadence content, can walk through deterministic troubleshooting, and
-            can collect demo requests or support tickets when the database is
-            connected.
+            {account ? `This widget answers from ${businessName}'s own saved help content. Add the script to your site and customers will get deterministic answers, troubleshooting and human handoff.` : "This is the Cadence demo help desk. It answers from seeded Cadence content and demonstrates deterministic answers, troubleshooting and human handoff."}
           </p>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-stretch">
             <code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-teal-200 bg-white px-4 py-3 text-xs leading-6 text-slate-800">
@@ -70,9 +74,7 @@ function InstallPage() {
             </button>
           </div>
           <p className="mt-3 text-xs text-teal-900">
-            Set <code>data-business</code> to your business slug (it defaults to
-            <code>cadence</code>), and optionally change <code>data-accent-color</code> to
-            a hex color. The iframe keeps widget styles isolated from the host page.
+            {account ? <>This snippet is configured for <strong>{businessName}</strong> ({slug}).</> : <>Sign in to see your own business snippet. Visitors see the Cadence demo snippet.</>} The iframe keeps widget styles isolated from the host page.
           </p>
         </section>
 
@@ -106,16 +108,13 @@ function InstallPage() {
                   3
                 </span>
                 <span>
-                  Publish the page, then use the “Chat with Cadence” launcher in
+                  Publish the page, then use the “Chat with {businessName}” launcher in
                   the lower-right corner.
                 </span>
               </li>
             </ol>
             <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">
-              <strong>Demo boundary:</strong> this install uses the seeded
-              Cadence content and the shared demo storage. It is not a
-              per-business account, calendar integration, email notification, or
-              production support commitment.
+              {account ? <><strong>Your workspace:</strong> this widget uses your saved knowledge-base entries. Add or edit answers from the operator view at <a className="font-semibold underline" href="/operator">/operator</a>.</> : <><strong>Demo:</strong> sign in for a per-business install snippet. Visitors see the seeded Cadence demo.</>}
             </div>
           </div>
 
@@ -146,8 +145,8 @@ function InstallPage() {
                 <span className="h-2 w-16 rounded-full bg-slate-200" />
               </div>
               <iframe
-                title="Embedded Cadence widget preview"
-                src="/widget?accent=%230f766e"
+                title={`Embedded ${businessName} widget preview`}
+                src={`/widget?accent=%230f766e&business=${encodeURIComponent(slug)}`}
                 className="mt-6 h-[430px] w-full rounded-xl border-0 bg-transparent"
               />
             </div>
