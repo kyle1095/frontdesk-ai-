@@ -1,17 +1,21 @@
 /**
  * Real-time abuse blocking for login/signup, backed by Upstash Redis.
  *
- * Fails open (never blocks, never throws) when UPSTASH_REDIS_REST_URL /
- * UPSTASH_REDIS_REST_TOKEN aren't set, so this ships safely before the
- * Upstash account exists and works with zero config in local dev — same
+ * Reads either the Vercel Marketplace integration's env var names
+ * (KV_REST_API_URL / KV_REST_API_TOKEN, set automatically when Upstash for
+ * Redis is provisioned through Vercel's Storage tab) or the plain Upstash
+ * account names (UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN, set
+ * when connecting an Upstash account directly). Fails open (never blocks,
+ * never throws) when neither pair is set, so this ships safely before the
+ * integration exists and works with zero config in local dev — same
  * "don't break the app for missing infra" philosophy as store.ts.
  */
 
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-const url = process.env.UPSTASH_REDIS_REST_URL;
-const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
 
 const redis = url && token ? new Redis({ url, token }) : null;
 

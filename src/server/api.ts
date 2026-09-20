@@ -16,6 +16,7 @@ import {
 import * as store from "./store";
 import * as auth from "./auth";
 import { currentRequestContext } from "./requestContext";
+import { getRequestUrl } from "@tanstack/react-start/server";
 
 export type { TurnResult } from "./engine";
 
@@ -353,14 +354,31 @@ export const widgetBusiness = createServerFn({ method: "GET" })
     return profile ?? { id: "cadence", name: "Cadence", slug: "cadence" };
   });
 
+/**
+ * The install snippet always targets the published production host, never a
+ * preview-deployment URL. `VERCEL_PROJECT_PRODUCTION_URL` is the project's
+ * stable production domain (the attached custom domain if one is set),
+ * populated automatically by Vercel at build/runtime — it never points at a
+ * preview alias. Falls back to deriving the origin from the actual request
+ * (local dev, or any non-Vercel host).
+ */
+function resolveOrigin(): string {
+  const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (productionUrl) return `https://${productionUrl}`;
+  try {
+    return getRequestUrl({ xForwardedHost: true, xForwardedProto: true }).origin;
+  } catch {
+    return "http://localhost:3000";
+  }
+}
+
 export const installData = createServerFn({ method: "GET" }).handler(async () => ({
-  origin: "https://f84c49587847aae2d38ee792763f89f2.ctonew.app",
+  origin: resolveOrigin(),
   account: await auth.currentAccount().catch(() => null),
 }));
 
-/** The install snippet always targets the published widget host, not a preview proxy host. */
 export const siteOrigin = createServerFn({ method: "GET" }).handler(
-  async () => "https://f84c49587847aae2d38ee792763f89f2.ctonew.app",
+  async () => resolveOrigin(),
 );
 
 /** Small public health check, used by the demo page footer. */
