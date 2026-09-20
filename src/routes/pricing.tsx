@@ -97,7 +97,7 @@ function PricingPage() {
                 className={
                   "relative flex flex-col rounded-xl p-[26px] " +
                   (popular
-                    ? "border-2 border-rc-accent bg-rc-card shadow-[0_20px_45px_-15px_rgba(45,212,191,0.25)] lg:scale-[1.05]"
+                    ? "border-2 border-rc-accent bg-rc-card shadow-[0_20px_45px_-15px_rgba(15,118,110,0.18)] lg:scale-[1.05]"
                     : "border border-rc-border bg-rc-card") +
                   (isCurrent && !popular ? " ring-2 ring-rc-accent/50" : "")
                 }

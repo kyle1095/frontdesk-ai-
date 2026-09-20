@@ -54,7 +54,7 @@ const FEATURES = [
 
 function FeatureIcon({ index }: { index: number }) {
   return (
-    <span className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-rc-accent/[0.18] shadow-[0_0_0_8px_rgba(45,212,191,0.08)]">
+    <span className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-rc-accent/[0.18] shadow-[0_0_0_8px_rgba(15,118,110,0.08)]">
       {index === 0 && (
         <span className="flex flex-col items-center gap-1">
           <span className="h-[3px] w-[22px] rounded-sm bg-rc-accent" />
@@ -116,9 +116,9 @@ function HomePage() {
         <div className="relative mx-auto mt-16 max-w-[1040px]">
           <div
             aria-hidden
-            className="absolute left-1/2 top-5 h-[220px] w-[70%] -translate-x-1/2 rounded-full bg-rc-accent opacity-35 blur-[90px]"
+            className="absolute left-1/2 top-5 h-[220px] w-[70%] -translate-x-1/2 rounded-full bg-rc-accent opacity-15 blur-[60px]"
           />
-          <div className="relative overflow-hidden rounded-2xl border border-rc-border border-t-[3px] border-t-rc-accent bg-rc-card text-left shadow-[0_30px_70px_-15px_rgba(45,212,191,0.3)]">
+          <div className="relative overflow-hidden rounded-2xl border border-rc-border border-t-[3px] border-t-rc-accent bg-rc-card text-left shadow-[0_20px_45px_-20px_rgba(15,118,110,0.35)]">
             <div className="flex h-10 items-center gap-1.5 border-b border-rc-border bg-rc-hero px-4">
               <span className="h-[9px] w-[9px] rounded-full bg-rc-border-muted" />
               <span className="h-[9px] w-[9px] rounded-full bg-rc-border-muted" />
@@ -141,7 +141,7 @@ function HomePage() {
                 Book appointment
               </div>
 
-              <div className="mt-8 w-full overflow-hidden rounded-[14px] border border-rc-border bg-rc-hero shadow-[0_16px_40px_-10px_rgba(45,212,191,0.35)] sm:absolute sm:bottom-10 sm:right-10 sm:mt-0 sm:w-[340px]">
+              <div className="mt-8 w-full overflow-hidden rounded-[14px] border border-rc-border bg-rc-hero shadow-[0_12px_28px_-12px_rgba(15,118,110,0.4)] sm:absolute sm:bottom-10 sm:right-10 sm:mt-0 sm:w-[340px]">
                 <div className="flex items-center gap-2.5 border-b border-rc-border px-[18px] py-4">
                   <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-rc-accent">
                     <span className="font-heading text-[13px] font-extrabold text-rc-on-accent">R</span>
@@ -275,7 +275,7 @@ function HomePage() {
                 className={
                   "relative rounded-xl border bg-rc-card p-7 " +
                   (popular
-                    ? "border-2 border-rc-accent shadow-[0_20px_45px_-15px_rgba(45,212,191,0.25)] sm:scale-[1.06]"
+                    ? "border-2 border-rc-accent shadow-[0_20px_45px_-15px_rgba(15,118,110,0.18)] sm:scale-[1.06]"
                     : "border-rc-border")
                 }
               >
