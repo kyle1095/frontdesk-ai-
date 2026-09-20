@@ -1,5 +1,5 @@
 /**
- * Frontdesk AI — embeddable help desk widget.
+ * ReceptIO — embeddable help desk widget.
  *
  * Self-contained: it takes a config object (business id, name, copy, accent) and
  * talks to the server through the `chatTurn` server function. Nothing here knows
@@ -44,7 +44,7 @@ export interface HelpDeskWidgetConfig {
   localPreview?: boolean;
   /** Optional public API endpoint used by cross-origin iframe installs. */
   apiUrl?: string;
-  /** Whether the Frontdesk AI footer is initially shown. Free plans force it on server-side. */
+  /** Whether the ReceptIO footer is initially shown. Free plans force it on server-side. */
   showBranding?: boolean;
   /** Where the launcher sits. Defaults to the bottom-right. */
   position?: "right" | "left";
@@ -276,7 +276,7 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
 
   // Let the host page open the widget from its own buttons. A host can also
   // pass an action or message to jump straight into a flow:
-  //   new CustomEvent("frontdesk:open", { detail: { action: "start_lead" } })
+  //   new CustomEvent("receptio:open", { detail: { action: "start_lead" } })
   useEffect(() => {
     const onOpen = (event: Event) => {
       const detail = (
@@ -293,8 +293,8 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
       }
       setOpen(true);
     };
-    window.addEventListener("frontdesk:open", onOpen);
-    return () => window.removeEventListener("frontdesk:open", onOpen);
+    window.addEventListener("receptio:open", onOpen);
+    return () => window.removeEventListener("receptio:open", onOpen);
   }, []);
 
   useEffect(() => {
@@ -525,7 +525,7 @@ export function HelpDeskWidget({ config }: { config: HelpDeskWidgetConfig }) {
           </form>
           {showBranding && (
             <p className="border-t border-slate-100 bg-white px-3 py-1.5 text-center text-[10px] text-slate-400">
-              Help desk by Frontdesk AI · answers come from{" "}
+              Help desk by ReceptIO · answers come from{" "}
               {config.businessName}
               &apos;s own help content
             </p>

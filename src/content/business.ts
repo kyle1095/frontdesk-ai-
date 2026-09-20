@@ -91,9 +91,9 @@ export const business = {
     { value: "2-way", label: "Calendar sync" },
   ],
   nav: ["Product", "Pricing", "Integrations", "Support"],
-  footerNote: "Cadence is a fictional business used to demonstrate a Frontdesk AI help desk.",
+  footerNote: "Cadence is a fictional business used to demonstrate a ReceptIO help desk.",
   demoBanner:
-    "Sample business page. The widget in the corner is Frontdesk AI, the help desk Cadence embedded on this site.",
+    "Sample business page. The widget in the corner is ReceptIO, the help desk Cadence embedded on this site.",
   supportHours: "Monday to Friday, 8am–6pm ET. Enterprise customers get 24/7 and a one hour response on P1 incidents.",
   timezone: "ET",
 } as const;

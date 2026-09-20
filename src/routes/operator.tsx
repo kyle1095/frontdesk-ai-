@@ -184,12 +184,12 @@ function OperatorPage() {
           <div>
             <h1 className="text-lg font-semibold">Help desk operator view</h1>
             <p className="text-sm text-slate-500">
-              Frontdesk AI · sample business “Cadence”
+              ReceptIO · sample business “Cadence”
             </p>
           </div>
           <div className="flex items-center gap-3">
             <a
-              href="/"
+              href="/demo"
               className="text-sm font-medium text-teal-700 underline underline-offset-4"
             >
               ← Back to demo site
@@ -312,7 +312,7 @@ function OperatorPage() {
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-700">
               <span><strong>{data.plan.used.toLocaleString()}</strong> of {data.plan.limit.toLocaleString()} conversations this month</span>
               <span>{data.plan.plan.seats} seat{data.plan.plan.seats === 1 ? "" : "s"}</span>
-              <span>{data.plan.brandingRequired ? "Frontdesk AI branding on" : "Branding removed"}</span>
+              <span>{data.plan.brandingRequired ? "ReceptIO branding on" : "Branding removed"}</span>
             </div>
           </section>
         )}

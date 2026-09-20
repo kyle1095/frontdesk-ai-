@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/* ReceptIO marketing design system — see ReceptIO-Website-Package/ReceptIO-Design-Handoff.docx */
+@theme {
+  --font-heading: "Manrope", -apple-system, "Segoe UI", sans-serif;
+
+  --color-rc-bg: #0a1615;
+  --color-rc-surface: #132a25;
+  --color-rc-hero: #0f211d;
+  --color-rc-card: #12241f;
+  --color-rc-card-raised: #1a332d;
+  --color-rc-border: #1f3d37;
+  --color-rc-border-muted: #33544d;
+  --color-rc-text: #f2fdfb;
+  --color-rc-text-secondary: #a9c4be;
+  --color-rc-text-tertiary: #74928c;
+  --color-rc-text-on-raised: #d7ece7;
+  --color-rc-accent: #0f766e;
+  --color-rc-on-accent: #f2fdfb;
+  --color-rc-code: #a9f2e7;
+}
+
 @layer base {
   html,
   body {
