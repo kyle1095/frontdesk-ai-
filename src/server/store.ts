@@ -289,6 +289,36 @@ const SCHEMA = [
      updated_at timestamptz NOT NULL DEFAULT now()
    )`,
   `CREATE INDEX IF NOT EXISTS kb_entries_business_idx ON kb_entries (business_id, created_at, id)`,
+  `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS ip text`,
+  `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_agent text`,
+  `CREATE TABLE IF NOT EXISTS security_events (
+     id bigserial PRIMARY KEY,
+     business_id text,
+     event_type text NOT NULL,
+     severity text NOT NULL DEFAULT 'warning' CHECK (severity IN ('info','warning','critical')),
+     ip text,
+     user_agent text,
+     actor_email text,
+     account_id text,
+     request_path text,
+     detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+     created_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS security_events_business_created_idx ON security_events (business_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS security_events_ip_type_created_idx ON security_events (ip, event_type, created_at)`,
+  `CREATE TABLE IF NOT EXISTS issue_log (
+     id bigserial PRIMARY KEY,
+     business_id text,
+     source text NOT NULL,
+     message text NOT NULL,
+     detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+     request_path text,
+     ip text,
+     user_agent text,
+     created_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS issue_log_business_created_idx ON issue_log (business_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS issue_log_created_idx ON issue_log (created_at)`,
 ];
 
 let schemaReady: Promise<void> | null = null;
@@ -449,7 +479,9 @@ export async function createKnowledgeBaseEntry(
     );
     return { ok: true, entry: mapKnowledgeBaseRow(rows[0]!) };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    const message = err instanceof Error ? err.message : String(err);
+    void logIssue({ source: "store.createKnowledgeBaseEntry", message, businessId });
+    return { ok: false, error: message };
   }
 }
 
@@ -471,7 +503,9 @@ export async function updateKnowledgeBaseEntry(
     );
     return rows[0] ? { ok: true, entry: mapKnowledgeBaseRow(rows[0]) } : { ok: false, error: "Knowledge-base entry not found." };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    const message = err instanceof Error ? err.message : String(err);
+    void logIssue({ source: "store.updateKnowledgeBaseEntry", message, businessId });
+    return { ok: false, error: message };
   }
 }
 
@@ -484,7 +518,9 @@ export async function deleteKnowledgeBaseEntry(
     const rows = await query(`DELETE FROM kb_entries WHERE id = $1 AND business_id = $2 RETURNING id`, [id, businessId]);
     return rows.length ? { ok: true } : { ok: false, error: "Knowledge-base entry not found." };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    const message = err instanceof Error ? err.message : String(err);
+    void logIssue({ source: "store.deleteKnowledgeBaseEntry", message, businessId });
+    return { ok: false, error: message };
   }
 }
 
@@ -519,15 +555,27 @@ export async function createConversation(
   initialState: unknown,
   source?: string | null,
   entryPoint?: string | null,
+  ip?: string | null,
+  userAgent?: string | null,
 ): Promise<string> {
   await ensureSchema();
   const id = crypto.randomUUID();
   await query(
-    `INSERT INTO conversations (id, business_id, state, source, entry_point)
-     VALUES ($1, $2, $3::jsonb, $4, $5)`,
-    [id, businessId, initialState ?? {}, source ?? null, entryPoint ?? null],
+    `INSERT INTO conversations (id, business_id, state, source, entry_point, ip, user_agent)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)`,
+    [id, businessId, initialState ?? {}, source ?? null, entryPoint ?? null, ip ?? null, userAgent?.slice(0, 300) ?? null],
   );
   return id;
+}
+
+/** Count of conversations created from this IP in the last `windowMinutes` — used to flag chat-flood attempts. */
+export async function countRecentConversationsByIp(ip: string, windowMinutes: number): Promise<number> {
+  await ensureSchema();
+  const rows = await query(
+    `SELECT count(*)::int AS n FROM conversations WHERE ip = $1 AND created_at >= now() - ($2 || ' minutes')::interval`,
+    [ip, String(windowMinutes)],
+  );
+  return Number(rows[0]?.n ?? 0);
 }
 
 export async function saveConversationState(
@@ -593,10 +641,9 @@ export async function createLead(
     );
     return { ok: true, id: Number(rows[0]?.id) };
   } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    const message = err instanceof Error ? err.message : String(err);
+    void logIssue({ source: "store.createLead", message, businessId: input.businessId });
+    return { ok: false, error: message };
   }
 }
 
@@ -623,10 +670,9 @@ export async function createTicket(
     );
     return { ok: true, reference, id: Number(rows[0]?.id) };
   } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    const message = err instanceof Error ? err.message : String(err);
+    void logIssue({ source: "store.createTicket", message, businessId: input.businessId });
+    return { ok: false, error: message };
   }
 }
 
@@ -702,10 +748,9 @@ export async function updateTicketStatus(
       ? { ok: true }
       : { ok: false, error: "Ticket not found." };
   } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    const message = err instanceof Error ? err.message : String(err);
+    void logIssue({ source: "store.updateTicketStatus", message, businessId });
+    return { ok: false, error: message };
   }
 }
 
@@ -807,4 +852,168 @@ export async function getTranscript(
       createdAt: iso(m.created_at),
     })),
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Security event log + general issue log.
+ *
+ * These are observability, not business data: they must never throw to
+ * their caller and never return an `{ ok: false }` failure shape, since a
+ * logging failure must not break the request being observed. On write
+ * failure they fall back to console.error so Vercel's function logs still
+ * capture something even if Postgres itself is unreachable.
+ * ------------------------------------------------------------------ */
+
+export interface SecurityEventInput {
+  eventType: string;
+  severity?: "info" | "warning" | "critical";
+  businessId?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+  actorEmail?: string | null;
+  accountId?: string | null;
+  requestPath?: string | null;
+  detail?: Record<string, unknown> | null;
+}
+
+export interface IssueLogInput {
+  source: string;
+  message: string;
+  businessId?: string | null;
+  detail?: Record<string, unknown> | null;
+  requestPath?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+}
+
+export interface SecurityEventRecord {
+  id: number;
+  businessId: string | null;
+  eventType: string;
+  severity: string;
+  ip: string | null;
+  userAgent: string | null;
+  actorEmail: string | null;
+  accountId: string | null;
+  requestPath: string | null;
+  detail: unknown;
+  createdAt: string;
+}
+
+export interface IssueLogRecord {
+  id: number;
+  businessId: string | null;
+  source: string;
+  message: string;
+  detail: unknown;
+  requestPath: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+/** No cron infra exists, so retention rides along on the write path itself —
+ * same "no separate migration/maintenance tool" spirit as ensureSchema(). */
+function maybePruneLogs(): void {
+  if (Math.random() >= 0.01) return;
+  void query(`DELETE FROM security_events WHERE created_at < now() - interval '90 days'`).catch(() => {});
+  void query(`DELETE FROM issue_log WHERE created_at < now() - interval '30 days'`).catch(() => {});
+}
+
+export async function logSecurityEvent(input: SecurityEventInput): Promise<void> {
+  try {
+    await ensureSchema();
+    await query(
+      `INSERT INTO security_events (business_id, event_type, severity, ip, user_agent, actor_email, account_id, request_path, detail)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+      [
+        input.businessId ?? null,
+        input.eventType.slice(0, 64),
+        input.severity ?? "warning",
+        input.ip?.slice(0, 64) ?? null,
+        input.userAgent?.slice(0, 300) ?? null,
+        input.actorEmail?.slice(0, 200) ?? null,
+        input.accountId ?? null,
+        input.requestPath?.slice(0, 200) ?? null,
+        JSON.stringify(input.detail ?? {}),
+      ],
+    );
+    maybePruneLogs();
+  } catch (err) {
+    console.error("[security-event-write-failed]", input.eventType, err);
+  }
+}
+
+export async function logIssue(input: IssueLogInput): Promise<void> {
+  try {
+    await ensureSchema();
+    await query(
+      `INSERT INTO issue_log (business_id, source, message, detail, request_path, ip, user_agent)
+       VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7)`,
+      [
+        input.businessId ?? null,
+        input.source.slice(0, 120),
+        input.message.slice(0, 2000),
+        JSON.stringify(input.detail ?? {}),
+        input.requestPath?.slice(0, 200) ?? null,
+        input.ip?.slice(0, 64) ?? null,
+        input.userAgent?.slice(0, 300) ?? null,
+      ],
+    );
+    maybePruneLogs();
+  } catch (err) {
+    console.error("[issue-log-write-failed]", input.source, err);
+  }
+}
+
+function mapSecurityEventRow(row: Row): SecurityEventRecord {
+  return {
+    id: Number(row.id),
+    businessId: row.business_id == null ? null : toText(row.business_id),
+    eventType: toText(row.event_type),
+    severity: toText(row.severity),
+    ip: row.ip == null ? null : toText(row.ip),
+    userAgent: row.user_agent == null ? null : toText(row.user_agent),
+    actorEmail: row.actor_email == null ? null : toText(row.actor_email),
+    accountId: row.account_id == null ? null : toText(row.account_id),
+    requestPath: row.request_path == null ? null : toText(row.request_path),
+    detail: row.detail,
+    createdAt: iso(row.created_at),
+  };
+}
+
+function mapIssueLogRow(row: Row): IssueLogRecord {
+  return {
+    id: Number(row.id),
+    businessId: row.business_id == null ? null : toText(row.business_id),
+    source: toText(row.source),
+    message: toText(row.message),
+    detail: row.detail,
+    requestPath: row.request_path == null ? null : toText(row.request_path),
+    ip: row.ip == null ? null : toText(row.ip),
+    userAgent: row.user_agent == null ? null : toText(row.user_agent),
+    createdAt: iso(row.created_at),
+  };
+}
+
+/** Scoped strictly to one business — see operator.security.tsx for why
+ * platform-wide (business_id IS NULL) rows are never exposed here. */
+export async function listSecurityEvents(businessId: string, limit = 100): Promise<SecurityEventRecord[]> {
+  await ensureSchema();
+  const rows = await query(
+    `SELECT id, business_id, event_type, severity, ip, user_agent, actor_email, account_id, request_path, detail, created_at
+     FROM security_events WHERE business_id = $1 ORDER BY id DESC LIMIT $2`,
+    [businessId, limit],
+  );
+  return rows.map(mapSecurityEventRow);
+}
+
+export async function listIssueLog(businessId: string, limit = 100): Promise<IssueLogRecord[]> {
+  await ensureSchema();
+  const rows = await query(
+    `SELECT id, business_id, source, message, detail, request_path, ip, user_agent, created_at
+     FROM issue_log WHERE business_id = $1 ORDER BY id DESC LIMIT $2`,
+    [businessId, limit],
+  );
+  return rows.map(mapIssueLogRow);
 }

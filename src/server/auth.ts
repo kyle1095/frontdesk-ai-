@@ -7,6 +7,8 @@ import {
 import { promisify } from "node:util";
 import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
 import * as store from "./store";
+import { currentRequestContext } from "./requestContext";
+import { checkLoginRateLimit, checkSignupRateLimit } from "./ratelimit";
 
 const scrypt = promisify(scryptCallback);
 export const SESSION_COOKIE = "frontdesk_session";
@@ -74,6 +76,12 @@ export async function currentAccount(): Promise<Account | null> {
 }
 
 export async function signup(email: string, password: string, businessName: string, signupSource?: string | null): Promise<{ ok: boolean; error?: string; account?: Account }> {
+  const { ip, userAgent } = currentRequestContext();
+  const { blocked } = await checkSignupRateLimit(ip);
+  if (blocked) {
+    void store.logSecurityEvent({ eventType: "signup_blocked", severity: "critical", ip, userAgent });
+    return { ok: false, error: "Too many signups from this network. Try again later." };
+  }
   email = normaliseEmail(email);
   businessName = businessName.trim().slice(0, 120);
   signupSource = signupSource?.trim().slice(0, 120) || null;
@@ -103,11 +111,27 @@ export async function signup(email: string, password: string, businessName: stri
 }
 
 export async function login(email: string, password: string): Promise<{ ok: boolean; error?: string; account?: Account }> {
+  const { ip, userAgent } = currentRequestContext();
   email = normaliseEmail(email);
+  const { blocked } = await checkLoginRateLimit(ip);
+  if (blocked) {
+    void store.logSecurityEvent({ eventType: "login_blocked", severity: "critical", ip, userAgent, actorEmail: email });
+    return { ok: false, error: "Too many attempts from this network. Try again later." };
+  }
   await store.ensureSchema();
   const rows = await store.query(`SELECT a.id, a.email, a.password_hash, b.id AS business_id, b.name AS business_name, b.slug AS business_slug, b.plan FROM accounts a JOIN businesses b ON b.id = a.business_id WHERE a.email = $1`, [email]);
   const row = rows[0];
-  if (!row || !(await verifyPassword(password, String(row.password_hash)))) return { ok: false, error: "Email or password is incorrect." };
+  if (!row || !(await verifyPassword(password, String(row.password_hash)))) {
+    void store.logSecurityEvent({
+      eventType: "login_failed",
+      severity: "warning",
+      ip,
+      userAgent,
+      actorEmail: email,
+      businessId: row ? String(row.business_id) : null,
+    });
+    return { ok: false, error: "Email or password is incorrect." };
+  }
   const account = { id: String(row.id), email: String(row.email), businessId: String(row.business_id), businessName: String(row.business_name), businessSlug: String(row.business_slug), plan: String(row.plan ?? "free") };
   await createSession(account.id);
   return { ok: true, account };

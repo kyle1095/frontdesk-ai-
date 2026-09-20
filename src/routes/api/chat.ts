@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { business } from "~/content/business";
 import { handleTurn, initialState, type TurnInput } from "~/server/engine";
+import { requestContextFromRequest } from "~/server/requestContext";
+import * as store from "~/server/store";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +27,7 @@ export const Route = createFileRoute("/api/chat")({
     handlers: {
       OPTIONS: async () => withCors(new Response(null, { status: 204 })),
       POST: async ({ request }) => {
+        const { ip, userAgent } = requestContextFromRequest(request);
         try {
           const raw = (await request.json()) as Record<string, unknown>;
           const input: TurnInput = {
@@ -46,17 +49,23 @@ export const Route = createFileRoute("/api/chat")({
               (typeof raw.source === "string" ? raw.source.slice(0, 120) : null),
             entryPoint:
               typeof raw.entryPoint === "string" ? raw.entryPoint.slice(0, 200) : null,
+            ip,
+            userAgent,
           };
           return withCors(Response.json(await handleTurn(input)));
         } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Invalid chat request.";
+          void store.logIssue({
+            source: "routes/api/chat",
+            message,
+            requestPath: request.url,
+            ip,
+            userAgent,
+          });
           return withCors(
             Response.json(
-              {
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : "Invalid chat request.",
-              },
+              { error: "Invalid chat request." },
               { status: 400 },
             ),
           );

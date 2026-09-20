@@ -189,6 +189,18 @@ function OperatorPage() {
           </div>
           <div className="flex items-center gap-3">
             <a
+              href="/operator/security"
+              className="text-sm font-medium text-teal-700 underline underline-offset-4"
+            >
+              Security log
+            </a>
+            <a
+              href="/operator/issues"
+              className="text-sm font-medium text-teal-700 underline underline-offset-4"
+            >
+              Issue log
+            </a>
+            <a
               href="/demo"
               className="text-sm font-medium text-teal-700 underline underline-offset-4"
             >
