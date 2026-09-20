@@ -15,6 +15,8 @@ import {
 } from "./engine";
 import * as store from "./store";
 import * as auth from "./auth";
+import { currentRequestContext } from "./requestContext";
+import { getRequestUrl } from "@tanstack/react-start/server";
 
 export type { TurnResult } from "./engine";
 
@@ -99,7 +101,8 @@ export const chatTurn = createServerFn({ method: "POST" })
     } satisfies ChatRequest;
   })
   .handler(async ({ data }): Promise<TurnResult> => {
-    return handleTurn(data as TurnInput);
+    const { ip, userAgent } = currentRequestContext();
+    return handleTurn({ ...data, ip, userAgent } as TurnInput);
   });
 
 /* ------------------------------------------------------------------ */
@@ -199,6 +202,18 @@ export const operatorData = createServerFn({ method: "POST" })
     }
   });
 
+export const operatorSecurityEvents = createServerFn({ method: "POST" }).handler(async () => {
+  const account = await auth.currentAccount();
+  if (!account) return { ok: false as const, error: "Sign-in required." };
+  return { ok: true as const, events: await store.listSecurityEvents(account.businessId, 100) };
+});
+
+export const operatorIssueLog = createServerFn({ method: "POST" }).handler(async () => {
+  const account = await auth.currentAccount();
+  if (!account) return { ok: false as const, error: "Sign-in required." };
+  return { ok: true as const, issues: await store.listIssueLog(account.businessId, 100) };
+});
+
 export interface OperatorMutationResponse {
   ok: boolean;
   error?: string;
@@ -226,7 +241,18 @@ export const operatorUpdateTicketStatus = createServerFn({ method: "POST" })
     ) {
       return { ok: false, error: "Invalid ticket update." };
     }
-    return store.updateTicketStatus(data.ticketId, data.status, account.businessId);
+    const result = await store.updateTicketStatus(data.ticketId, data.status, account.businessId);
+    if (result.ok) {
+      void store.logSecurityEvent({
+        eventType: "operator_ticket_status_changed",
+        severity: "info",
+        businessId: account.businessId,
+        accountId: account.id,
+        actorEmail: account.email,
+        detail: { ticketId: data.ticketId, status: data.status },
+      });
+    }
+    return result;
   });
 
 function knowledgeInput(value: unknown): store.KnowledgeBaseInput {
@@ -251,7 +277,18 @@ export const operatorCreateKnowledgeBase = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<OperatorMutationResponse & { entry?: store.KnowledgeBaseEntry }> => {
     const account = await auth.currentAccount();
     if (!account) return { ok: false, error: "Sign-in required." };
-    return store.createKnowledgeBaseEntry(account.businessId, data);
+    const result = await store.createKnowledgeBaseEntry(account.businessId, data);
+    if (result.ok) {
+      void store.logSecurityEvent({
+        eventType: "operator_kb_created",
+        severity: "info",
+        businessId: account.businessId,
+        accountId: account.id,
+        actorEmail: account.email,
+        detail: { entryId: result.entry?.id, title: data.title },
+      });
+    }
+    return result;
   });
 
 export const operatorUpdateKnowledgeBase = createServerFn({ method: "POST" })
@@ -260,7 +297,18 @@ export const operatorUpdateKnowledgeBase = createServerFn({ method: "POST" })
     const account = await auth.currentAccount();
     if (!account) return { ok: false, error: "Sign-in required." };
     if (!data.id) return { ok: false, error: "Entry id is required." };
-    return store.updateKnowledgeBaseEntry(account.businessId, data.id, data);
+    const result = await store.updateKnowledgeBaseEntry(account.businessId, data.id, data);
+    if (result.ok) {
+      void store.logSecurityEvent({
+        eventType: "operator_kb_updated",
+        severity: "info",
+        businessId: account.businessId,
+        accountId: account.id,
+        actorEmail: account.email,
+        detail: { entryId: data.id, title: data.title },
+      });
+    }
+    return result;
   });
 
 export const operatorDeleteKnowledgeBase = createServerFn({ method: "POST" })
@@ -272,7 +320,18 @@ export const operatorDeleteKnowledgeBase = createServerFn({ method: "POST" })
     const account = await auth.currentAccount();
     if (!account) return { ok: false, error: "Sign-in required." };
     if (!data.id) return { ok: false, error: "Entry id is required." };
-    return store.deleteKnowledgeBaseEntry(account.businessId, data.id);
+    const result = await store.deleteKnowledgeBaseEntry(account.businessId, data.id);
+    if (result.ok) {
+      void store.logSecurityEvent({
+        eventType: "operator_kb_deleted",
+        severity: "info",
+        businessId: account.businessId,
+        accountId: account.id,
+        actorEmail: account.email,
+        detail: { entryId: data.id },
+      });
+    }
+    return result;
   });
 
 export const widgetBusiness = createServerFn({ method: "GET" })
@@ -281,22 +340,52 @@ export const widgetBusiness = createServerFn({ method: "GET" })
     return { businessId: typeof obj.businessId === "string" ? obj.businessId : "cadence" };
   })
   .handler(async ({ data }) => {
-    return (await store.getBusinessProfile(data.businessId)) ?? { id: "cadence", name: "Cadence", slug: "cadence" };
+    const profile = await store.getBusinessProfile(data.businessId);
+    if (!profile) {
+      const { ip, userAgent } = currentRequestContext();
+      void store.logSecurityEvent({
+        eventType: "invalid_widget_slug",
+        severity: "warning",
+        ip,
+        userAgent,
+        detail: { slug: data.businessId },
+      });
+    }
+    return profile ?? { id: "cadence", name: "Cadence", slug: "cadence" };
   });
 
+/**
+ * The install snippet always targets the published production host, never a
+ * preview-deployment URL. `VERCEL_PROJECT_PRODUCTION_URL` is the project's
+ * stable production domain (the attached custom domain if one is set),
+ * populated automatically by Vercel at build/runtime — it never points at a
+ * preview alias. Falls back to deriving the origin from the actual request
+ * (local dev, or any non-Vercel host).
+ */
+function resolveOrigin(): string {
+  const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (productionUrl) return `https://${productionUrl}`;
+  try {
+    return getRequestUrl({ xForwardedHost: true, xForwardedProto: true }).origin;
+  } catch {
+    return "http://localhost:3000";
+  }
+}
+
 export const installData = createServerFn({ method: "GET" }).handler(async () => ({
-  origin: "https://f84c49587847aae2d38ee792763f89f2.ctonew.app",
+  origin: resolveOrigin(),
   account: await auth.currentAccount().catch(() => null),
 }));
 
-/** The install snippet always targets the published widget host, not a preview proxy host. */
 export const siteOrigin = createServerFn({ method: "GET" }).handler(
-  async () => "https://f84c49587847aae2d38ee792763f89f2.ctonew.app",
+  async () => resolveOrigin(),
 );
 
 /** Small public health check, used by the demo page footer. */
 export const storageHealth = createServerFn({ method: "GET" }).handler(
   async () => {
+    const { ip, userAgent } = currentRequestContext();
+    void store.logSecurityEvent({ eventType: "storage_probe", severity: "info", ip, userAgent });
     const status = await store.storageStatus();
     return {
       configured: status.configured,

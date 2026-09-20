@@ -102,6 +102,10 @@ export interface TurnResult {
   brandingRequired: boolean;
 }
 
+/** More than this many new conversations from one IP in 5 minutes is flagged
+ * as a suspected chat-flood (logged, not blocked — see security-logging plan). */
+const CHAT_FLOOD_THRESHOLD = 20;
+
 export interface TurnInput {
   businessId?: string;
   conversationId?: string | null;
@@ -110,6 +114,8 @@ export interface TurnInput {
   state?: unknown;
   source?: string | null;
   entryPoint?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
 }
 
 type Effect =
@@ -794,6 +800,8 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
   const action = input.action ?? "send";
   const source = input.source?.trim().slice(0, 120) || null;
   const entryPoint = input.entryPoint?.trim().slice(0, 200) || null;
+  const ip = input.ip ?? null;
+  const userAgent = input.userAgent ?? null;
 
   let conversationId = input.conversationId ?? null;
   let state = normaliseState(input.state);
@@ -874,9 +882,22 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
 
   if (!conversationId) {
     try {
-      conversationId = await store.createConversation(businessId, state, source, entryPoint);
+      conversationId = await store.createConversation(businessId, state, source, entryPoint, ip, userAgent);
       planUsage = { ...planUsage, used: planUsage.used + 1 };
       storageOk = true;
+      if (ip) {
+        const recent = await store.countRecentConversationsByIp(ip, 5).catch(() => 0);
+        if (recent >= CHAT_FLOOD_THRESHOLD) {
+          void store.logSecurityEvent({
+            eventType: "chat_flood_suspected",
+            severity: "critical",
+            businessId,
+            ip,
+            userAgent,
+            detail: { recentConversations: recent, windowMinutes: 5 },
+          });
+        }
+      }
     } catch (err) {
       storageError = errText(err);
       conversationId = null;
@@ -1025,6 +1046,17 @@ export async function handleTurn(input: TurnInput, llmLayer: LlmLayer = llm): Pr
       if (!storageError) storageError = errText(err);
       storageOk = false;
     }
+  }
+
+  if (!storageOk && storageError) {
+    void store.logIssue({
+      source: "engine.handleTurn",
+      message: storageError,
+      businessId,
+      requestPath: "chatTurn",
+      ip,
+      userAgent,
+    });
   }
 
   return {
