@@ -9,7 +9,7 @@
 #  - Bundling it into one self-contained file (deps + dynamic chunks inlined) in a
 #    single render.func removes all tracing/detection risk. vercel-entry.ts adapts
 #    the Node (req,res) launcher to the web fetch handler.
-set -euo pipefail
+set -eu
 cd "$(dirname "$0")"
 umask 002
 
