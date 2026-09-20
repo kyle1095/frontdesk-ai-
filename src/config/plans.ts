@@ -33,7 +33,7 @@ export const plans: readonly PlanConfig[] = [
     whiteLabel: false,
     paymentLinkUrl: null,
     description: "A simple way to try an AI front desk.",
-    highlights: ["50 conversations / month", "Frontdesk AI branding", "1 seat"],
+    highlights: ["50 conversations / month", "ReceptIO branding", "1 seat"],
   },
   {
     id: "starter",

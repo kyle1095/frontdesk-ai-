@@ -1,493 +1,314 @@
 /**
- * The demo business page: "Cadence" — a fictional scheduling product for
- * clinics — with the Frontdesk AI help desk widget embedded on it.
+ * ReceptIO marketing homepage.
  *
- * All copy and knowledge-base content comes from `~/content/business`, so the
- * whole demo can be re-skinned by editing that one file.
+ * Visual design: ReceptIO-Website-Package/ReceptIO-Design-Handoff.docx.
+ * The live demo panel below is an illustrative mockup (a fictional
+ * "Cadence Dental Care" site); the real interactive widget lives at /demo.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
-import {
-  HelpDeskWidget,
-  type HelpDeskWidgetConfig,
-} from "~/components/HelpDeskWidget";
-import type { WidgetAction } from "~/server/engine";
-import { business, helpDesk, knowledgeBase } from "~/content/business";
-import { captureAttributionSource } from "~/client/attribution";
+import { useState } from "react";
+import { MarketingNav } from "~/components/marketing/Nav";
+import { MarketingFooter } from "~/components/marketing/Footer";
+import { plans } from "~/config/plans";
 
 export const Route = createFileRoute("/")({
-  component: Home,
+  component: HomePage,
 });
 
-const widgetConfig: HelpDeskWidgetConfig = {
-  businessId: business.id,
-  businessName: business.name,
-  title: `${business.name} support`,
-  subtitle: "Answers, fixes, tickets and demos",
-  greeting: helpDesk.greeting,
-  accent: "#0f766e",
-  quickActions: [...helpDesk.quickActions],
-  suggestions: [
-    ...helpDesk.suggestions,
-    "Is Cadence suitable for veterinary clinics?",
-  ],
-  position: "right",
-};
+const DEMO_ANSWERS = {
+  hours: {
+    chip: "What are your hours?",
+    answer: "We're open Monday to Friday, 8am to 5pm, and Saturday 9am to 1pm.",
+  },
+  walkins: {
+    chip: "Do you accept walk-ins?",
+    answer: "We see walk-ins when we have openings, but booking ahead guarantees your spot.",
+  },
+  pricing: {
+    chip: "How much is a cleaning?",
+    answer: "A routine cleaning is $120 without insurance. Most PPO plans cover it in full.",
+  },
+} as const;
 
-const faqSuggestions = [
-  "How much does Cadence cost?",
-  "Is there a free trial?",
-  "Which calendars do you sync with?",
-  "How do I set up Cadence?",
-  "Is Cadence HIPAA compliant?",
-  "Is Cadence suitable for veterinary clinics?",
-];
+type DemoKey = keyof typeof DEMO_ANSWERS;
 
-const trapQuestions = [
-  "Do you offer reptile boarding?",
-  "Can you diagnose my dog?",
-  "Do you have a discount for new clients?",
-];
+const FEATURES = [
+  {
+    title: "Answers from your content only",
+    body: "It reads the help articles, FAQs, and policies you give it, and answers only from those.",
+  },
+  {
+    title: "One line to install",
+    body: "Paste a single script tag into your site. No developer or long setup required.",
+  },
+  {
+    title: "Ticket or call-slot handoff",
+    body: "When it doesn't know, it hands off cleanly to a ticket or a weekday call a person confirms.",
+  },
+  {
+    title: "Works alongside what you use",
+    body: "It sits next to your existing booking and calendar tools instead of replacing them.",
+  },
+] as const;
 
-const troubleSuggestions = [
-  "My calendar isn't syncing",
-  "Booking an appointment won't save",
-  "I can't log in, how do I reset my password?",
-  "Appointments are showing the wrong timezone",
-  "My patient CSV import failed",
-  "Reminders aren't being sent to patients",
-];
-
-function openWidget(action?: WidgetAction, message?: string) {
-  window.dispatchEvent(
-    new CustomEvent("frontdesk:open", {
-      detail: { action, message },
-    }),
+function FeatureIcon({ index }: { index: number }) {
+  return (
+    <span className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-rc-accent/[0.18] shadow-[0_0_0_8px_rgba(45,212,191,0.08)]">
+      {index === 0 && (
+        <span className="flex flex-col items-center gap-1">
+          <span className="h-[3px] w-[22px] rounded-sm bg-rc-accent" />
+          <span className="h-[3px] w-[17px] rounded-sm bg-rc-accent" />
+          <span className="h-[3px] w-[22px] rounded-sm bg-rc-accent" />
+        </span>
+      )}
+      {index === 1 && <span className="h-1.5 w-[30px] rounded bg-rc-accent" />}
+      {index === 2 && (
+        <span className="h-[30px] w-[30px] rounded-full border-4 border-rc-accent bg-rc-bg" />
+      )}
+      {index === 3 && (
+        <span className="flex items-center">
+          <span className="h-[22px] w-[22px] rounded-full bg-rc-accent" />
+          <span className="-ml-2 h-[22px] w-[22px] rounded-full border-2 border-rc-accent bg-rc-bg" />
+        </span>
+      )}
+    </span>
   );
 }
 
-function Home() {
-  useEffect(() => {
-    captureAttributionSource();
-  }, []);
+function HomePage() {
+  const [demoKey, setDemoKey] = useState<DemoKey>("hours");
+  const teaserPlans = plans.filter((plan) => plan.id !== "pro");
 
   return (
-    <div className="min-h-dvh bg-white text-slate-900">
-      {/* Demo notice — this is our sample business page, not Frontdesk AI's own site */}
-      <div className="bg-slate-900 px-4 py-2 text-center text-xs text-slate-200">
-        {business.demoBanner}{" "}
-        <a
-          className="underline decoration-dotted hover:text-white"
-          href="/setup"
-        >
-          Knowledge base setup
-        </a>
-        {" · "}
-        <a
-          className="underline decoration-dotted hover:text-white"
-          href="/operator"
-        >
-          Operator view
-        </a>
-        {" · "}
-        <a
-          className="underline decoration-dotted hover:text-white"
-          href="/install"
-        >
-          Install widget
-        </a>
-      </div>
+    <div className="bg-rc-bg font-sans text-rc-text">
+      <MarketingNav active="home" />
 
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-700 text-sm font-bold text-white">
-              C
-            </span>
-            <span className="text-lg font-semibold tracking-tight">
-              {business.name}
-            </span>
-          </div>
-          <nav
-            aria-label="Main"
-            className="hidden gap-6 text-sm text-slate-600 sm:flex"
-          >
-            {business.nav.map((item) => (
-              <a
-                key={item}
-                href={`#${item.toLowerCase()}`}
-                className="hover:text-slate-900"
-              >
-                {item}
-              </a>
-            ))}
-          </nav>
-          <button
-            type="button"
-            onClick={openWidget}
-            className="rounded-full bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
-          >
-            Talk to us
-          </button>
+      {/* Hero */}
+      <section className="px-4 pb-24 pt-20 text-center sm:px-10 sm:pb-24 sm:pt-24">
+        <div className="mx-auto inline-flex items-center rounded-full border border-rc-border-muted px-[18px] py-2">
+          <span className="font-heading text-sm font-semibold text-rc-text-secondary">
+            For small, independent service businesses
+          </span>
         </div>
-      </header>
+        <h1 className="mx-auto mt-7 max-w-[780px] font-heading text-4xl font-extrabold leading-[1.15] text-rc-text sm:text-[58px]">
+          Stop <span className="text-rc-accent">answering the same questions</span> all day.
+        </h1>
+        <p className="mx-auto mt-6 max-w-[600px] text-lg leading-relaxed text-rc-text-secondary sm:text-xl">
+          ReceptIO answers what your customers ask every day, using your own content — and honestly says &quot;I don&apos;t know&quot; instead of guessing.
+        </p>
+        <div className="mt-10 flex flex-wrap justify-center gap-4">
+          <a
+            href="/install"
+            className="rounded-lg bg-rc-accent px-8 py-4 font-heading text-base font-bold text-rc-on-accent transition hover:brightness-95"
+          >
+            Install it free
+          </a>
+          <a
+            href="#refuse"
+            className="rounded-lg border border-rc-border-muted px-7 py-4 font-heading text-base font-bold text-rc-text transition hover:border-rc-text-tertiary hover:bg-rc-card-raised"
+          >
+            See it answer a question it doesn&apos;t know
+          </a>
+        </div>
 
-      <main>
-        <section className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:py-20 lg:grid-cols-2 lg:items-center">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-teal-700">
-              {business.tagline}
-            </p>
-            <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-              {business.hero.headline}
-            </h1>
-            <p className="mt-4 text-lg text-slate-600">
-              {business.hero.subhead}
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={openWidget}
-                className="rounded-full bg-teal-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-teal-800"
-              >
-                {business.hero.primaryCta}
-              </button>
-              <button
-                type="button"
-                onClick={() => openWidget("start_lead")}
-                className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
-              >
-                {business.hero.secondaryCta}
-              </button>
+        {/* Illustrative live-demo mockup */}
+        <div className="relative mx-auto mt-16 max-w-[1040px]">
+          <div
+            aria-hidden
+            className="absolute left-1/2 top-5 h-[220px] w-[70%] -translate-x-1/2 rounded-full bg-rc-accent opacity-35 blur-[90px]"
+          />
+          <div className="relative overflow-hidden rounded-2xl border border-rc-border border-t-[3px] border-t-rc-accent bg-rc-card text-left shadow-[0_30px_70px_-15px_rgba(45,212,191,0.3)]">
+            <div className="flex h-10 items-center gap-1.5 border-b border-rc-border bg-rc-hero px-4">
+              <span className="h-[9px] w-[9px] rounded-full bg-rc-border-muted" />
+              <span className="h-[9px] w-[9px] rounded-full bg-rc-border-muted" />
+              <span className="h-[9px] w-[9px] rounded-full bg-rc-border-muted" />
+              <span className="mx-auto text-[13px] text-rc-text-tertiary">cadencedentalcare.com</span>
             </div>
-            <dl className="mt-10 grid grid-cols-3 gap-4 border-t border-slate-200 pt-6">
-              {business.stats.map((stat) => (
-                <div key={stat.label}>
-                  <dt className="text-xs text-slate-500">{stat.label}</dt>
-                  <dd className="text-lg font-semibold">{stat.value}</dd>
+            <div className="relative min-h-[400px] bg-rc-card p-8 sm:p-12">
+              <div className="mb-8 flex items-center justify-between">
+                <span className="font-heading text-lg font-extrabold text-rc-text">Cadence Dental Care</span>
+                <div className="hidden gap-6 sm:flex">
+                  <span className="text-[13px] text-rc-text-tertiary">Services</span>
+                  <span className="text-[13px] text-rc-text-tertiary">Team</span>
+                  <span className="text-[13px] text-rc-text-tertiary">Book</span>
                 </div>
-              ))}
-            </dl>
-          </div>
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Today · Riverside Clinic
-              </p>
-              <ul className="mt-4 space-y-3 text-sm">
-                {[
-                  ["09:00", "Dr Alvarez · Follow-up", "Confirmed"],
-                  ["09:30", "Dr Okafor · New patient", "Reminder sent"],
-                  ["10:15", "Dr Alvarez · Telehealth", "Video link ready"],
-                  ["11:00", "Open slot", "Booking page live"],
-                ].map(([time, what, status]) => (
-                  <li
-                    key={time}
-                    className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2 last:border-0"
-                  >
-                    <span className="flex items-center gap-3">
-                      <span className="font-mono text-xs text-slate-500">
-                        {time}
-                      </span>
-                      <span className="font-medium text-slate-800">{what}</span>
-                    </span>
-                    <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs text-teal-800">
-                      {status}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p className="mt-4 text-center text-xs text-slate-500">
-              Illustrative UI, not connected to a real clinic.
-            </p>
-          </div>
-        </section>
-
-        <section
-          id="product"
-          className="border-t border-slate-200 bg-slate-50 py-16"
-        >
-          <div className="mx-auto max-w-6xl px-4">
-            <h2 className="text-2xl font-bold tracking-tight">
-              Everything the front desk juggles, in one place
-            </h2>
-            <p className="mt-2 max-w-2xl text-slate-600">
-              {business.shortDescription}
-            </p>
-            <div className="mt-8 grid gap-6 sm:grid-cols-2">
-              {business.features.map((feature) => (
-                <article
-                  key={feature.title}
-                  className="rounded-2xl border border-slate-200 bg-white p-6"
-                >
-                  <h3 className="font-semibold">{feature.title}</h3>
-                  <p className="mt-2 text-sm text-slate-600">{feature.body}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="border-y border-slate-200 bg-white py-12">
-          <div className="mx-auto max-w-6xl px-4">
-            <div className="rounded-2xl border border-teal-200 bg-teal-50 p-6 sm:flex sm:items-center sm:justify-between sm:gap-8">
-              <div className="max-w-2xl">
-                <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
-                  Try to break it
-                </p>
-                <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-                  Ask something outside the help content
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-slate-700">
-                  These questions are not in Cadence&apos;s seeded help content.
-                  Watch the assistant say so plainly instead of inventing an
-                  answer, then offer a ticket for a human to pick up.
-                </p>
               </div>
-              <div className="mt-5 flex flex-wrap gap-2 sm:mt-0 sm:max-w-md sm:justify-end">
-                {trapQuestions.map((question) => (
-                  <button
-                    key={question}
-                    type="button"
-                    onClick={() => openWidget("send", question)}
-                    className="rounded-full border border-teal-300 bg-white px-3 py-2 text-left text-sm font-medium text-teal-900 transition hover:border-teal-500 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
-                  >
-                    {question}
-                  </button>
-                ))}
+              <div className="mb-5 h-[140px] w-full rounded-[10px] bg-rc-card-raised" />
+              <div className="mb-2.5 h-3 w-3/5 rounded bg-rc-card-raised" />
+              <div className="mb-6 h-3 w-2/5 rounded bg-rc-card-raised" />
+              <div className="inline-block rounded-lg bg-rc-accent px-[18px] py-2.5 text-[13px] font-semibold text-rc-on-accent">
+                Book appointment
               </div>
-            </div>
-          </div>
-        </section>
 
-        <section id="support" className="mx-auto max-w-6xl px-4 py-16">
-          <div className="grid gap-10 lg:grid-cols-2">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">
-                Support that answers before you queue
-              </h2>
-              <p className="mt-2 text-slate-600">
-                The chat in the corner is our help desk. It answers from{" "}
-                <span className="font-medium text-slate-800">
-                  {knowledgeBase.length} help articles
-                </span>
-                , walks you through fixes step by step, files a ticket with a
-                reference number when it cannot help, and books demo slots. Try
-                one of these:
-              </p>
-              <ul className="mt-6 space-y-2">
-                {faqSuggestions.map((question) => (
-                  <li key={question}>
-                    <button
-                      type="button"
-                      onClick={openWidget}
-                      className="text-left text-sm font-medium text-teal-800 underline decoration-teal-300 underline-offset-4 hover:decoration-teal-700"
-                    >
-                      {question}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Operator handoff preview
-                    </p>
-                    <h3 className="mt-1 text-lg font-semibold text-slate-900">
-                      What a human sees next
-                    </h3>
-                  </div>
-                  <span className="rounded-full border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    Illustrative
+              <div className="mt-8 w-full overflow-hidden rounded-[14px] border border-rc-border bg-rc-hero shadow-[0_16px_40px_-10px_rgba(45,212,191,0.35)] sm:absolute sm:bottom-10 sm:right-10 sm:mt-0 sm:w-[340px]">
+                <div className="flex items-center gap-2.5 border-b border-rc-border px-[18px] py-4">
+                  <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-rc-accent">
+                    <span className="font-heading text-[13px] font-extrabold text-rc-on-accent">R</span>
                   </span>
-                </div>
-                <div className="mt-5 space-y-3">
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                    <div className="flex items-center justify-between gap-3 text-xs font-semibold text-amber-900">
-                      <span>Ticket filed</span>
-                      <span>Example</span>
-                    </div>
-                    <p className="mt-2 text-sm font-semibold text-slate-900">
-                      Ref TK-1042 · Calendar sync question
-                    </p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      The transcript and customer&apos;s original question stay
-                      attached.
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
-                    <div className="flex items-center justify-between gap-3 text-xs font-semibold text-teal-900">
-                      <span>Call slot offered</span>
-                      <span>Example</span>
-                    </div>
-                    <p className="mt-2 text-sm font-semibold text-slate-900">
-                      Tue 10:00 ET · 30 minutes
-                    </p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      A human confirms the selected demo time after the request
-                      is saved.
-                    </p>
+                  <div>
+                    <div className="font-heading text-[13px] font-bold text-rc-text">Ask Cadence Dental Care</div>
+                    <div className="text-[11px] text-rc-text-tertiary">Powered by ReceptIO</div>
                   </div>
                 </div>
-                <p className="mt-4 text-xs leading-5 text-slate-500">
-                  Example only — this preview is not a live ticket or calendar
-                  slot. The widget creates real handoffs when its storage is
-                  connected.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                  Common problems it can fix
-                </h3>
-                <ul className="mt-4 grid gap-2 text-sm text-slate-700">
-                  {troubleSuggestions.map((topic) => (
-                    <li key={topic} className="flex items-start gap-2">
-                      <span
-                        aria-hidden
-                        className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600"
-                      />
-                      <button
-                        type="button"
-                        onClick={openWidget}
-                        className="text-left hover:text-teal-800"
-                      >
-                        {topic}
-                      </button>
-                    </li>
+                <div className="flex flex-wrap gap-1.5 px-4 pb-1.5 pt-3.5">
+                  {(Object.keys(DEMO_ANSWERS) as DemoKey[]).map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setDemoKey(key)}
+                      className={
+                        "rounded-full border px-3 py-2 text-xs font-semibold transition " +
+                        (demoKey === key
+                          ? "border-rc-accent bg-rc-accent text-rc-on-accent"
+                          : "border-transparent bg-rc-card-raised text-rc-text-on-raised hover:brightness-110")
+                      }
+                    >
+                      {DEMO_ANSWERS[key].chip}
+                    </button>
                   ))}
-                </ul>
-                <p className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
-                  If the help desk does not know an answer, it says so and
-                  offers to pass the question to a human — it is not allowed to
-                  invent pricing, policy or a fix.
-                </p>
+                </div>
+                <div className="min-h-[88px] px-4 pb-4 pt-2">
+                  <div className="rounded-[4px_12px_12px_12px] bg-rc-card-raised p-3.5 text-[13px] leading-relaxed text-rc-text-on-raised">
+                    {DEMO_ANSWERS[demoKey].answer}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+        </div>
+        <p className="mx-auto mt-4 max-w-[1040px] text-center text-xs text-rc-text-tertiary">
+          Illustrative mockup — see the widget answer for real in the{" "}
+          <a href="/demo" className="underline decoration-dotted hover:text-rc-text-secondary">
+            live demo
+          </a>
+          .
+        </p>
+      </section>
 
-          <p className="mt-8 text-sm leading-6 text-slate-600">
-            This whole support experience is Frontdesk AI — it answers from
-            these {knowledgeBase.length} articles, books call slots, and files
-            tickets with reference numbers. Add it to your site with one line,
-            free for 50 conversations/month →{" "}
-            <a
-              className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950"
-              href="/install"
-            >
-              Install
-            </a>{" "}
-            ·{" "}
-            <a
-              className="font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950"
-              href="/pricing"
-            >
-              Pricing
-            </a>
-          </p>
-        </section>
-
-        <section
-          id="integrations"
-          className="border-t border-slate-200 bg-slate-50 py-16"
-        >
-          <div className="mx-auto max-w-6xl px-4">
-            <h2 className="text-2xl font-bold tracking-tight">
-              Works with what clinics already use
+      {/* Refuse to guess */}
+      <section id="refuse" className="bg-rc-hero px-4 py-20 sm:px-10 sm:py-24">
+        <div className="mx-auto grid max-w-[1160px] items-center gap-12 lg:grid-cols-[1fr_1.15fr] lg:gap-16">
+          <div>
+            <p className="font-heading text-lg text-rc-accent">The honest part</p>
+            <h2 className="mt-2 font-heading text-3xl font-extrabold leading-tight text-rc-text sm:text-4xl">
+              Watch it refuse to guess
             </h2>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {[
-                "Google Calendar",
-                "Microsoft 365",
-                "Outlook",
-                "Apple Calendar (iCal)",
-                "Stripe",
-                "Twilio SMS",
-                "Zoom",
-                "Google Meet",
-                "Zapier",
-              ].map((name) => (
-                <span
-                  key={name}
-                  className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700"
-                >
-                  {name}
-                </span>
-              ))}
-            </div>
-            <p className="mt-4 text-sm text-slate-600">
-              Ask the help desk which calendars sync two-way, and what is{" "}
-              <em>not</em> supported — it will tell you plainly.
+            <p className="mt-4 text-lg leading-relaxed text-rc-text-secondary">
+              Most AI chat tools make something up when they don&apos;t know an answer. ReceptIO doesn&apos;t — it says so, and hands off cleanly instead.
             </p>
           </div>
-        </section>
-
-        <section id="pricing" className="mx-auto max-w-6xl px-4 py-16">
-          <h2 className="text-2xl font-bold tracking-tight">Plans</h2>
-          <p className="mt-2 text-slate-600">
-            Billed per location, per month. Every plan includes the booking page
-            and two-way calendar sync.
-          </p>
-          <div className="mt-8 grid gap-6 sm:grid-cols-3">
-            {[
-              [
-                "Starter",
-                "$59",
-                "1 location, up to 5 staff, online booking, email reminders",
-              ],
-              [
-                "Growth",
-                "$149",
-                "Up to 20 staff, SMS reminders, waitlists, reporting",
-              ],
-              [
-                "Enterprise",
-                "Custom",
-                "Multi-location, SSO/SAML, API and FHIR export",
-              ],
-            ].map(([name, price, blurb]) => (
-              <article
-                key={name}
-                className="flex flex-col rounded-2xl border border-slate-200 p-6"
-              >
-                <h3 className="font-semibold">{name}</h3>
-                <p className="mt-2 text-3xl font-bold">
-                  {price}
-                  {price.startsWith("$") && (
-                    <span className="text-sm font-normal text-slate-500">
-                      /mo
-                    </span>
-                  )}
-                </p>
-                <p className="mt-3 flex-1 text-sm text-slate-600">{blurb}</p>
-                <button
-                  type="button"
-                  onClick={openWidget}
-                  className="mt-5 rounded-full border border-teal-700 px-4 py-2 text-sm font-semibold text-teal-800 transition hover:bg-teal-50"
-                >
-                  Ask about {name}
-                </button>
-              </article>
-            ))}
+          <div className="flex flex-col gap-5">
+            <div className="rounded-xl border border-rc-border bg-rc-card p-6">
+              <div className="mb-3 flex justify-end">
+                <div className="max-w-[85%] rounded-[12px_12px_4px_12px] bg-rc-accent px-4 py-3 text-sm text-rc-on-accent">
+                  Do you have a payment plan for orthodontic work?
+                </div>
+              </div>
+              <div className="mb-4 flex justify-start">
+                <div className="max-w-[85%] rounded-[4px_12px_12px_12px] bg-rc-card-raised px-4 py-3 text-sm leading-relaxed text-rc-text-on-raised">
+                  I don&apos;t have that in the help content I can see, and I&apos;d rather not guess. I&apos;ve filed a ticket so a person can follow up.
+                </div>
+              </div>
+              <div className="rounded-[10px] border border-dashed border-rc-accent bg-rc-card-raised p-4">
+                <div className="mb-1 font-heading text-sm font-bold text-rc-text">Support ticket #RCP-48213 filed</div>
+                <div className="text-[13px] text-rc-text-secondary">Cadence Dental Care will follow up by email within one business day.</div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-rc-border bg-rc-card p-6">
+              <div className="mb-3 flex justify-end">
+                <div className="max-w-[85%] rounded-[12px_12px_4px_12px] bg-rc-accent px-4 py-3 text-sm text-rc-on-accent">
+                  Can someone walk me through my specific insurance coverage?
+                </div>
+              </div>
+              <div className="mb-4 flex justify-start">
+                <div className="max-w-[85%] rounded-[4px_12px_12px_12px] bg-rc-card-raised px-4 py-3 text-sm leading-relaxed text-rc-text-on-raised">
+                  That&apos;s outside what I can answer from the help content here, so I&apos;d rather not guess. I can offer a quick call instead.
+                </div>
+              </div>
+              <div className="rounded-[10px] border border-dashed border-rc-accent bg-rc-card-raised p-4">
+                <div className="mb-1 font-heading text-sm font-bold text-rc-text">30-minute call offered — Tuesday, 2:00 PM</div>
+                <div className="text-[13px] text-rc-text-secondary">A member of the Cadence Dental Care team confirms every slot.</div>
+              </div>
+            </div>
           </div>
-        </section>
-      </main>
-
-      <footer className="border-t border-slate-200 bg-slate-900 py-10 text-slate-300">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 text-sm">
-          <p className="font-semibold text-white">{business.name}</p>
-          <p>{business.shortDescription}</p>
-          <p>Support: {business.supportHours}</p>
-          <p className="text-xs text-slate-400">{business.footerNote}</p>
         </div>
-      </footer>
+      </section>
 
-      <HelpDeskWidget config={widgetConfig} />
+      {/* Features */}
+      <section className="bg-rc-bg px-4 py-24 sm:px-10">
+        <div className="mx-auto max-w-[640px] text-center">
+          <p className="font-heading text-lg text-rc-accent">Features</p>
+          <h2 className="mt-2 font-heading text-3xl font-extrabold text-rc-text sm:text-4xl">
+            Built around one rule: never guess
+          </h2>
+          <p className="mt-4 text-lg leading-relaxed text-rc-text-secondary sm:text-xl">
+            ReceptIO does a few things well, and nothing beyond what your content supports.
+          </p>
+        </div>
+        <div className="mx-auto mt-12 grid max-w-[1160px] grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {FEATURES.map((feature, index) => (
+            <article key={feature.title} className="p-6 text-center">
+              <FeatureIcon index={index} />
+              <h3 className="mb-2.5 font-heading text-lg font-bold text-rc-text">{feature.title}</h3>
+              <p className="text-sm leading-relaxed text-rc-text-secondary">{feature.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* Pricing teaser */}
+      <section className="bg-rc-hero px-4 py-24 sm:px-10">
+        <div className="mx-auto max-w-[640px] text-center">
+          <p className="font-heading text-lg text-rc-accent">Pricing</p>
+          <h2 className="mt-2 font-heading text-3xl font-extrabold text-rc-text sm:text-4xl">Simple, flat plans</h2>
+          <p className="mt-4 text-lg leading-relaxed text-rc-text-secondary sm:text-xl">
+            Three of our four tiers, shown here. No per-resolution fees, ever.
+          </p>
+        </div>
+        <div className="mx-auto mt-14 grid max-w-[1160px] grid-cols-1 items-start gap-7 sm:grid-cols-3">
+          {teaserPlans.map((plan) => {
+            const popular = plan.id === "growth";
+            return (
+              <div
+                key={plan.id}
+                className={
+                  "relative rounded-xl border bg-rc-card p-7 " +
+                  (popular
+                    ? "border-2 border-rc-accent shadow-[0_20px_45px_-15px_rgba(45,212,191,0.25)] sm:scale-[1.06]"
+                    : "border-rc-border")
+                }
+              >
+                {popular && (
+                  <span className="absolute -top-3 left-7 rounded-full bg-rc-accent px-3 py-1 font-heading text-xs font-bold text-rc-on-accent">
+                    Most popular
+                  </span>
+                )}
+                <div className="mb-3 font-heading text-lg font-extrabold text-rc-text">{plan.name}</div>
+                <div className="mb-4">
+                  <span className="font-heading text-3xl font-extrabold text-rc-text">
+                    {plan.monthlyPrice === 0 ? "$0" : `$${plan.monthlyPrice}`}
+                  </span>
+                  <span className="text-sm text-rc-text-secondary"> /month</span>
+                </div>
+                <p className="text-sm leading-[1.9] text-rc-text-secondary">
+                  {plan.highlights.join(" · ")}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-12 text-center">
+          <a
+            href="/pricing"
+            className="inline-block rounded-lg border border-rc-border-muted px-7 py-3.5 font-heading text-sm font-bold text-rc-text transition hover:border-rc-text-tertiary hover:bg-rc-card-raised"
+          >
+            See full pricing →
+          </a>
+        </div>
+      </section>
+
+      <MarketingFooter />
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const LOADER = String.raw`/* Frontdesk AI widget loader — paste this script before </body>. */
+const LOADER = String.raw`/* ReceptIO widget loader — paste this script before </body>. */
 (function () {
   var script = document.currentScript;
-  if (!script || script.getAttribute("data-frontdesk-loaded")) return;
-  script.setAttribute("data-frontdesk-loaded", "true");
+  if (!script || script.getAttribute("data-receptio-loaded")) return;
+  script.setAttribute("data-receptio-loaded", "true");
 
   var origin = new URL(script.src, window.location.href).origin;
   var params = new URLSearchParams();
@@ -18,9 +18,9 @@ const LOADER = String.raw`/* Frontdesk AI widget loader — paste this script be
   if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(business)) params.set("business", business);
 
   var frame = document.createElement("iframe");
-  frame.title = "Frontdesk AI chat widget";
+  frame.title = "ReceptIO chat widget";
   frame.src = origin + "/widget" + (params.toString() ? "?" + params.toString() : "");
-  frame.setAttribute("aria-label", "Frontdesk AI chat widget");
+  frame.setAttribute("aria-label", "ReceptIO chat widget");
   frame.setAttribute("allow", "clipboard-write");
   frame.style.cssText = [
     "position:fixed",

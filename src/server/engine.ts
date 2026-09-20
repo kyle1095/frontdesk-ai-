@@ -363,7 +363,7 @@ function capabilityReply(state: ConversationState, businessName = business.name)
     state,
     replies: [
       {
-        text: `I'm the ${businessName} assistant, running on Frontdesk AI. I can:\n• answer questions about ${business.name} — what it does, plans, the free trial, integrations, setup, security;\n• walk you through fixes for common problems;\n• book you a 30 minute demo with a specialist;\n• file a ticket with a reference number if you need a human.\n\nI only answer from ${business.name}'s own help content, so if something isn't in there I'll say so rather than guess.`,
+        text: `I'm the ${businessName} assistant, running on ReceptIO. I can:\n• answer questions about ${business.name} — what it does, plans, the free trial, integrations, setup, security;\n• walk you through fixes for common problems;\n• book you a 30 minute demo with a specialist;\n• file a ticket with a reference number if you need a human.\n\nI only answer from ${business.name}'s own help content, so if something isn't in there I'll say so rather than guess.`,
         chips: QUICK_CHIPS,
       },
     ],

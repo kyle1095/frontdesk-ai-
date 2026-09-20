@@ -123,7 +123,7 @@ function KnowledgeBaseSetup() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
-              Frontdesk AI setup
+              ReceptIO setup
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight">
               Teach your help desk what to say
@@ -134,7 +134,7 @@ function KnowledgeBaseSetup() {
             </p>
           </div>
           <a
-            href="/"
+            href="/demo"
             className="text-sm font-semibold text-teal-700 underline underline-offset-4"
           >
             ← Back to Cadence demo
@@ -384,7 +384,7 @@ function KnowledgeBaseSetup() {
             <button
               type="button"
               onClick={() =>
-                window.dispatchEvent(new CustomEvent("frontdesk:open"))
+                window.dispatchEvent(new CustomEvent("receptio:open"))
               }
               className="mt-4 rounded-full bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800"
             >
